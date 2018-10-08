@@ -10,6 +10,8 @@ to their liking before solving.
 ## Live Demo
 https://alexyuisingwu.github.io/sliding-puzzle-solver/
 
+**NOTE**: Currently a work in progress: things might change periodically.
+
 ## Solver Details
 
 ### Solvability
