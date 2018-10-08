@@ -1,0 +1,24 @@
+{
+  "name": "sliding-puzzle-solver",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "avl": "^1.4.4",
+    "cropperjs": "^1.4.1",
+    "fastpriorityqueue": "^0.6.1",
+    "ndarray": "^1.0.18"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.1.0",
+    "@babel/preset-env": "^7.1.0",
+    "babel-loader": "^8.0.2",
+    "css-loader": "^1.0.0",
+    "regenerator-runtime": "^0.12.1",
+    "style-loader": "^0.23.0",
+    "webpack": "^4.19.1",
+    "webpack-cli": "^3.1.0"
+  },
+  "author": "Alex Wu",
+  "license": "ISC"
+}

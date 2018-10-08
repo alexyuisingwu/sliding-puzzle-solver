@@ -1,0 +1,142 @@
+/* Restoring form warning css from earlier versions of bootstrap 4 */
+.form-control.has-warning {
+	border-color: #f0ad4e;
+}
+
+.form-control.has-warning ~ .warning-feedback {
+	display: block;
+}
+/*-----------------------------------------------------------------*/
+
+.alert p {
+	margin: 0;
+}
+
+.warning-feedback {
+	display: none;
+	width: 100%;
+    margin-top: .25rem;
+    font-size: 80%;
+    color: #dc3545;
+	color: #f0ad4e;
+}
+
+#crop-image-button {
+	cursor: pointer;
+}
+
+.grid-title {
+	fill: gray;
+}
+
+.grid-container:focus {
+	outline: none;
+}
+
+.grid-container:focus .puzzle-outline {
+	filter: url(#shadow);
+}
+
+.tile-outline {
+	fill:none;
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+	/* keeps tile outlines visible against any background*/
+	mix-blend-mode: difference;
+	stroke:white;
+}
+
+.tile-container {
+	pointer-events: all;
+}
+
+.tile-container.dragging .tile-overlay{
+	cursor: grabbing;
+}
+
+.puzzle-outline {
+	/*TODO: fiddle with color*/
+	fill:aliceblue;
+	stroke:black;
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
+	pointer-events: visible;
+}
+
+.grid-title {
+	text-anchor: middle;
+	alignment-baseline: baseline;
+}
+
+.puzzle-arrow {
+	opacity: 0.6;
+}
+
+.puzzle-arrow:hover {
+	opacity: 0.7;
+	cursor: pointer;
+}
+
+.tile-number {
+	text-anchor: middle;
+	alignment-baseline: middle;
+	/*font-size set dynamically in javascript to better fit tiles*/
+	fill: black;
+}
+
+/* keeps tile number visible against dark backgrounds*/
+.tile-number-background {
+	fill: white;
+	opacity: 0.2;
+}
+
+.tile-overlay {
+	visibility: hidden;
+	pointer-events: all;
+}
+
+.tile-underlay {
+	fill:none;
+	stroke:grey;
+	vector-effect: non-scaling-stroke;
+}
+/*
+.tile-container:hover .delete-overlay {
+	display: initial;
+	fill: red;
+	opacity: 0.5;
+}*/
+
+/*.tile-container:hover .select-overlay {
+	display: initial;
+	fill: steelblue;
+	opacity: 0.5;
+}*/
+
+.delete-overlay {
+	visibility: visible;
+	fill: red;
+	opacity: 0.5;
+	cursor:pointer;
+}
+
+.select-overlay {
+	visibility: visible;
+	fill: steelblue;
+	opacity: 0.5;
+	cursor:pointer;
+}
+
+/*consider moving to outside and decreasing width of list-item*/
+.move-list {
+	list-style: decimal inside;
+}
+
+.move-list-item {
+	display: list-item;
+}
+
+/* used instead of bootstrap 4 active as color less intense and pairs better with theme*/
+.active-move {
+	background: lightblue;
+}

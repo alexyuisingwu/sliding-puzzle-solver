@@ -1,0 +1,94 @@
+<!-- TODO: consider using dark background -->
+<!-- TODO: add navbar to navigate between puzzle and config pages -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <title>Sliding Puzzle</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
+    <!-- TODO: consider including in webpack -->
+    <link href="src/style.css" rel="stylesheet">
+
+    <!-- TODO: consider adding scripts to bundle after completion-->
+    <!-- TODO: consider using min version after completion -->
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.7.0/d3.js" integrity="sha256-qNzZal0keStZ8CLwnu0Fxs+6BGnD5tpk4D1BevFGQDQ=" crossorigin="anonymous"></script>
+    <script defer src="puzzle-graphic.js"></script>
+    <script defer src="dist/main.bundle.js"></script>
+    <script defer
+    src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
+    integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g="
+    crossorigin="anonymous"></script>
+    <script defer src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.bundle.min.js" integrity="sha384-pjaaA8dDz/5BgdFUPX6M/9SUZv4d12SUPF0axWc+VRZkx5xU3daN+lYb49+Ax+Tl" crossorigin="anonymous"></script>
+</head>
+<body id="body">
+    <div class="container-fluid text-center">
+        <div id = "messages">
+            <div id="instructions" class="alert alert-info" role="alert" style="display:none"></div>
+            <div id="warning" class="alert alert-warning alert-dismissible fade show" role="alert" style="display:none">
+                <p id="warning-message"></p>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div id="error" class="alert alert-danger" role="alert" style="display:none">
+                <p id="error-message"></p>
+            </div>
+        </div>
+        <div id="image-upload-page">
+            <div id="image-row">
+                <div id="image-upload-container" style="height: 500px">
+                    <!-- TODO: replace with project directory file when project hosted online (not allowed cross-origin requests locally)-->
+                    <img id="uploaded-image" src="https://images.pexels.com/photos/84604/bench-lake-square-sky-84604.jpeg?auto=compress&cs=tinysrgb&h=650&w=940" style='max-width: 100%; max-height: 100%'> </img>
+                </div>
+            </div>
+
+            <!-- TODO: consider having explicit load button for image link to prevent loading on every keypress and give greater control and clarity to loading -->
+            <form id="image-form" class="card">
+                <fieldset>
+                    <legend class="card-header">Replace Image</legend>
+                    <div class="form-row justify-content-center card-body">
+                        <label for="image-url" class="col-md-1 col-form-label">Image URL</label>
+                        <div class="col-md-3">
+                            <input id="image-url" type="url" class="form-control"></input>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <!-- display: table prevents button from expanding from invalid-feedback appearing -->
+                        <label class="btn btn-secondary col-md-1" style="display: table">
+                            Browse <input id="upload-img-input" type="file" accept="image/*" style="display:none">
+                        </label>
+                    </div>
+                </fieldset>
+            </form>
+
+            <!-- validation done by javascript -->
+            <form id="puzzle-config-form" class="card">
+                <legend class="card-header">Configure Puzzle</legend>
+                <div class="card-body">
+                    <div class="form-row justify-content-center">   
+                        <div class="form-group col-md-3">
+                            <label for="num-rows">Rows</label>
+                            <input id="num-rows" class="form-control" type="number" value="3" min="1" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label for="num-cols">Columns</label>
+                            <input id="num-cols" class="form-control" type="number" value="3" min="1" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+                    <div class="form-row justify-content-center">
+                        <button id="crop-image-button" class="form-control col-md-3 btn btn-secondary" type="submit">Crop Image</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div id="puzzle-page" style="display: none">
+            <div id="puzzle-container">
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>
