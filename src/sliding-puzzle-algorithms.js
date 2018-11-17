@@ -6,11 +6,13 @@
 // "Criticizing Solutions to Relaxed Models Yields Powerful Admissible Heuristics"
 // by Othar Hansson and Andrew Mayer
 
+// TODO: modify readme to explain how to use node + webpack + babel
+
 // TODO: write function to time performance of different alg+heuristic combos
 
-// TODO: make solving stoppable and asynchronous (so stop button can be pressed)
+// TODO: make solving stoppable (so stop button can be pressed on 4x4 or larger puzzles)
 
-// TODO: fix freeze when trying to solve some 5x4 puzzles (and presumably those larger than that)
+// TODO: fix freeze when solving some 5x4 puzzles (and presumably those larger than that) using A*
 // iteration limit should work, but not working and/or iterations taking substantially more memory + longer
 
 // TODO: consider storing precomputed values in global object
@@ -25,14 +27,14 @@
 // pros: fairly simple, avoids memory leak, faster solving of same size puzzle
 // cons: a little messier, can't manage multiple independent Puzzles at same time with different size
 // ex: 2 puzzles with 2x2, 3x3 dimensions, cache would be reset each time one was solved
-// Addon: precompute values in script.js before "solve" button is clicked, to avoid longer
-// solve time on first click. May need to be async to be invisible to user
+
 
 import FastPriorityQueue from 'fastpriorityqueue'
 import ndarray from 'ndarray'
 import AVLTree from 'avl'
 
 import {range, permutationGenerator} from './math-utils'
+import regeneratorRuntime from 'regenerator-runtime'
 
 const REVERSE_MOVE_MAP = {
     'r': 'l',
@@ -41,9 +43,12 @@ const REVERSE_MOVE_MAP = {
     'u': 'd'
 }
 
-// TODO: combine multiple heuristics max(manhattan, corner, pattern database, linear conflict), or additive disjoint patterns
 // TODO: if using pattern database, consider encoding pattern numbers into bytes and storing in int
 // probably use 6-6-3 pattern database (while not fastest, takes up moderate amount of memory)
+// consider using IndexedDB for db storage
+// pros: simple, well-supported
+// cons: probably slower than loading Map into memory
+// alternative: look into storing db as bytes, read whole db into memory at start and query from there
 // TODO: note that pattern dbs will make it difficult to allow non-square puzzles with dimensions > 4
 
 // TODO: consider precomputing LC for each possible state to reduce updates to table lookups
@@ -585,22 +590,37 @@ class Puzzle {
      * @param tiles flattened array of tile ids corresponding to their locations in the unsolved puzzle
      * (where ids = tile positions in the solved puzzle left to right, top to bottom, 0 indexed)
      * @param emptyPos position of empty tile in grid
-     * @param heuristic heuristic used to determine how far grid is from goal state. Default heuristic is Manhattan Distance
+     * @param heuristic heuristic used to determine how far grid is from goal state.
+     * Default heuristic is Linear Conflict, possible values are 'MD' and 'LC'
+     * corresponding with manhattan distance and linear conflict respectively
+     * @param solver solving algorithm to use ('IDA*' or 'A*')
      */
-    constructor(numRows, numCols, tiles, emptyPos, heuristic = LinearConflictHeuristic, solver='IDA*') {
+    constructor(numRows, numCols, tiles, emptyPos, 
+        {heuristic = 'LC', solver = numRows * numCols > 9 ? 'IDA*' : 'A*'} = {}) {
+
         this.numRows = numRows;
         this.numCols = numCols;
         // use less memory if possible
         this.tiles = numRows * numCols > 256 ? Uint16Array.from(tiles): Uint8Array.from(tiles);
         this.emptyPos = emptyPos;
-        this.heuristic = new heuristic(numRows, numCols);
-        if (solver === null) {
-            this.solver = numRows * numCols > 9 ? 'IDA*' : 'A*';
-        } else {
-            this.solver = solver;
+
+        let heuristicClass;
+        switch (heuristic) {
+            case 'MD':
+                heuristicClass  = ManhattanHeuristic;
+                break;
+            default:
+                heuristicClass = LinearConflictHeuristic;
         }
+
+        this.heuristic = new heuristicClass(numRows, numCols);
+        this.solver = solver;
     }
 
+    // returns
+    // - solution as array of moves within (l/r/u/d)
+    // - -1 if solution took too long to find
+    // - null if solution could not be found
     solve(maxIterations = 100000) {
         if (this.solver === 'A*') {
             return this.solveAStar(maxIterations);
@@ -643,7 +663,7 @@ class Puzzle {
 
         while (q.size > 0) {
             if (iterations > maxIterations) {
-                throw new Error('Max number of iterations exceeded');
+                return -1;
             }
 
             curr = q.poll();

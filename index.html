@@ -5,22 +5,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="author" content="Alex Wu">
+    <meta 
+        name="description"
+        content="This sliding puzzle solver aims to allow users to solve, create,
+        and play sliding puzzles with custom images and dimensions.">
+    <title>Sliding Puzzle Solver</title>
+    <link 
+        href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
 
-    <title>Sliding Puzzle</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO" crossorigin="anonymous">
-    <!-- TODO: consider including in webpack -->
-    <link href="src/style.css" rel="stylesheet">
+    <link href="src/style.css" rel="stylesheet" cache="no-cache public">
 
-    <!-- TODO: consider adding scripts to bundle after completion-->
-    <!-- TODO: consider using min version after completion -->
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.7.0/d3.js" integrity="sha256-qNzZal0keStZ8CLwnu0Fxs+6BGnD5tpk4D1BevFGQDQ=" crossorigin="anonymous"></script>
-    <script defer src="puzzle-graphic.js"></script>
-    <script defer src="dist/main.bundle.js"></script>
     <script defer
-    src="https://code.jquery.com/jquery-3.2.1.slim.min.js"
-    integrity="sha256-k2WSCIexGzOj3Euiig+TlR8gA0EmPjuc79OEeY5L45g="
-    crossorigin="anonymous"></script>
-    <script defer src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.bundle.min.js" integrity="sha384-pjaaA8dDz/5BgdFUPX6M/9SUZv4d12SUPF0axWc+VRZkx5xU3daN+lYb49+Ax+Tl" crossorigin="anonymous"></script>
+        src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.7.0/d3.min.js" 
+        integrity="sha256-va1Vhe+all/yVFhzgwmwBgWMVfLHjXlNJfvsrjUBRgk=" 
+        crossorigin="anonymous"></script>
+    <!-- TODO: add to bundle after completion-->
+    <script defer src="dist/main.bundle.js" cache="no-cache public"></script>
+    <script defer
+      src="https://code.jquery.com/jquery-3.3.1.slim.min.js"
+      integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E="
+      crossorigin="anonymous"></script>
+    <script defer 
+        src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.bundle.min.js" 
+        integrity="sha384-pjaaA8dDz/5BgdFUPX6M/9SUZv4d12SUPF0axWc+VRZkx5xU3daN+lYb49+Ax+Tl"
+        crossorigin="anonymous"></script>
 </head>
 <body id="body">
     <div class="container-fluid text-center">
@@ -37,21 +48,21 @@
             </div>
         </div>
         <div id="image-upload-page">
+            <!-- TODO: improve title display -->
+            <h1>Sliding Puzzle Solver</h1>
             <div id="image-row">
-                <div id="image-upload-container" style="height: 500px">
-                    <!-- TODO: replace with project directory file when project hosted online (not allowed cross-origin requests locally)-->
-                    <img id="uploaded-image" src="https://images.pexels.com/photos/84604/bench-lake-square-sky-84604.jpeg?auto=compress&cs=tinysrgb&h=650&w=940" style='max-width: 100%; max-height: 100%'> </img>
+                <div id="image-upload-container" style="height: 50vh">
+                    <img id="uploaded-image" src="imgs/pexels-bench-trees.jpeg" style='max-width: 100%; height: 100%' crossorigin="anonymous">
                 </div>
             </div>
 
-            <!-- TODO: consider having explicit load button for image link to prevent loading on every keypress and give greater control and clarity to loading -->
             <form id="image-form" class="card">
                 <fieldset>
                     <legend class="card-header">Replace Image</legend>
                     <div class="form-row justify-content-center card-body">
                         <label for="image-url" class="col-md-1 col-form-label">Image URL</label>
                         <div class="col-md-3">
-                            <input id="image-url" type="url" class="form-control"></input>
+                            <input id="image-url" type="url" class="form-control">
                             <div class="invalid-feedback"></div>
                         </div>
                         <!-- display: table prevents button from expanding from invalid-feedback appearing -->
@@ -64,29 +75,68 @@
 
             <!-- validation done by javascript -->
             <form id="puzzle-config-form" class="card">
-                <legend class="card-header">Configure Puzzle</legend>
-                <div class="card-body">
-                    <div class="form-row justify-content-center">   
-                        <div class="form-group col-md-3">
-                            <label for="num-rows">Rows</label>
-                            <input id="num-rows" class="form-control" type="number" value="3" min="1" required>
-                            <div class="invalid-feedback"></div>
+                <fieldset>
+                    <legend class="card-header">Configure Puzzle</legend>
+                    <div class="card-body">
+                        <div class="form-row justify-content-center">   
+                            <div class="form-group col-md-3">
+                                <label for="num-rows">Rows</label>
+                                <input id="num-rows" class="form-control" type="number" value="3" min="1" required>
+                                <div class="invalid-feedback"></div>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label for="num-cols">Columns</label>
+                                <input id="num-cols" class="form-control" type="number" value="3" min="1" required>
+                                <div class="invalid-feedback"></div>
+                            </div>
                         </div>
-                        <div class="form-group col-md-3">
-                            <label for="num-cols">Columns</label>
-                            <input id="num-cols" class="form-control" type="number" value="3" min="1" required>
-                            <div class="invalid-feedback"></div>
+                        <div class="form-row justify-content-center">
+                            <button id="crop-image-button" class="form-control col-md-3 btn btn-secondary" type="submit">Crop Image</button>
                         </div>
                     </div>
-                    <div class="form-row justify-content-center">
-                        <button id="crop-image-button" class="form-control col-md-3 btn btn-secondary" type="submit">Crop Image</button>
-                    </div>
-                </div>
+            </fieldset>
             </form>
         </div>
         <div id="puzzle-page" style="display: none">
-            <div id="puzzle-container">
+            <!-- TODO: find out point of puzzle-container, eliminate if unnecessary -->
+                <!-- viewbox set dynamically -->
+            <svg id="puzzle-svg" style="width: 100%">
+                <defs>
+                    <filter id="shadow">
+                        <feDropShadow dx="0" dy="0" stdDeviation="3"/>
+                    </filter>
+                </defs>
 
+            </svg>
+
+            <div id="puzzle-button-toolbar" class="btn-toolbar mb-2 justify-content-center">
+                <div id="puzzle-buttons" class="btn-group mr-2 my-1">
+                    <button id="shuffle-button" class="btn btn-secondary" disabled>Shuffle</button>
+                    <button id="solve-button" class="btn btn-secondary" disabled>Solve</button>
+                    <button id="reset-puzzle-button" class="btn btn-secondary">Reset</button>
+                </div>
+                <div id="overlay-buttons" class="btn-group mr-2 my-1">
+                    <button id="number-overlay-button" class="btn btn-secondary">Show Number Overlay</button>
+                    <button id="toggle-mouse-mode-button" class="btn btn-secondary" disabled>
+                        Tile Selection Mode
+                    </button>
+                </div>
+            </div>
+
+            <div id="solution-panel" class="card" style="display: none">
+                <div class="card-header">Solution</div>
+                <div class="card-body" style="max-height: 100px; overflow-y: scroll">
+                    <ol class="list-group move-list"></ol>
+                </div>
+            </div>
+            <!-- TODO: consider using for both solving and animation: that way, can use stop and fast-forward buttons for animation and block other interaction until 1 is chosen -->
+            <div id="solving-overlay" class="container-fluid align-items-center" style="display:none">
+                <div class="row">
+                    <div class="loader"></div>
+                </div>
+                <div class="row">
+                    <a id="cancel-solving-button">Cancel</a>
+                </div>
             </div>
         </div>
     </div>

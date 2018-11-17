@@ -1,4 +1,4 @@
-// TODO: consider adding compression plugin to webpack
+// TODO: consider adding togglable "track move" feature
 
 // TODO: consider changing to vertical orientation if screen too narrow or input images are landscape orientation
 
@@ -10,16 +10,38 @@
 // TODO: consider moving all node_modules into dev dependencies since they are bundled
 
 // TODO: consider implementing "play" button disabling drag/select and only allowing arrow key movement and change drag/click to animate moves to neighboring tiles
-import Cropper from 'cropperjs'
-import Puzzle from './sliding-puzzle-algorithms'
+
+// just importing from cropperjs uses un-minified version
+import Cropper from '../node_modules/cropperjs/dist/cropper.min.js'
+import {Grid, StartGrid, GoalGrid} from './puzzle-graphic.js'
 import '../node_modules/cropperjs/dist/cropper.min.css'
+import Puzzle from './async-puzzle-solver'
+import isURL from 'validator/lib/isURL'
 
 // TODO: uglify+minify re-enable after finish
 
 // TODO: reorganize: validation functions separate js file
 
 // TODO: consider moving each page to separate js file, with page manager switching between them
+// possibility: store image as blob in localStorage, then just link to puzzle page
+// alternatively, look into postMessage between Windows
+
+// TODO: display fixed semi-transparent overlay during Worker execution to prevent user interaction
+// (add button to cancel puzzle solving at any time)
+// implementation: consider adapting QueryableWorker from mdn example to allow clean instantiation
+// of new workers after termination due to timeout
+// alternative: wrap solve() in Promise within worker, allowing worker to handle cancellation message
 (() => {
+    // proxy server used to circumvent blocking of cross-origin requests by CORS
+    const CORS_API_URL = 'https://cors-anywhere-alexyuisingwu.herokuapp.com/';
+
+    // TODO: consider commenting out to reduce heroku dyno use-time
+
+    // request to wake up heroku server early
+    // (free heroku hosting "sleeps" after 30 min. of disuse)
+    // to avoid delay before user submits cross-origin image link
+    fetch(CORS_API_URL, {method: 'HEAD', cache: 'no-store'});
+
     class Util {
         static hide(e) {
             e = e instanceof d3.selection ? e : d3.select(e);
@@ -28,7 +50,7 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
 
         static show(e) {
             e = e instanceof d3.selection ? e : d3.select(e);
-            e.style('display', '');
+            e.style('display', '')
         }
 
         static toggle(e) {
@@ -51,8 +73,7 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
           imageRow = d3.select('#image-row'),
           instructions = d3.select('#instructions');
 
-    const puzzlePage = d3.select('#puzzle-page'),
-          puzzleContainer = d3.select('#puzzle-container');
+    const puzzlePage = d3.select('#puzzle-page');
 
 
     //--------------------------------------------------------------------------------------------------------
@@ -202,27 +223,64 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
         return {status: 'valid'};
     }
 
+    let imageType = 'image/jpeg';
 
-    imgUrlInput.on('input', function() {
-        let url = this.value;
+    function loadImageUrl(url, useProxy=false) {
 
         if (url === '') {
             hideMessages(imgUrlInput, imgFeedback);
             return;
         }
 
-        let img = new Image();
-
-        img.onerror = () => {
-            showError(imgUrlInput, imgFeedback, 'Image could not be loaded');
+        if (!isURL(url, {require_protocol: true})) {
+            if (isURL(url, {require_protocol: false})) {
+                url = 'http://' + url;
+            } else {
+                showError(imgUrlInput, imgFeedback, 'URL is invalid');
+                return;
+            }
         }
 
-        img.onload = () => {
-            cropper.replace(this.value);
-            hideMessages(imgUrlInput, imgFeedback);
-        }
+        // NOTE: not checking for image url before fetching because
+        // HTML standard doesn't specify accepted image formats, 
+        // so can differ between browsers
 
-        img.src = url;
+        // TODO: make sure cors redirect only fires if url valid but cors error,
+        // not if 404 error
+        fetch(url, {
+            mode: 'cors',
+            credentials: 'omit'
+        })
+            .then(response => {
+                // 404 errors (like for invalid urls) not thrown by fetch
+                if (response.ok) {
+                    if (!response.headers.get('content-type').includes('image')) {                        throw new Error('URL does not point to image');
+                    }
+                    return response.blob();
+                }
+                // url could be correct and still not be loaded
+                // ex: url is for image gated behind login/other authentication
+                throw new Error('Image could not be loaded');
+            })
+            .then(blob => {
+                imageType = blob.type;
+                cropper.replace(URL.createObjectURL(blob));
+                hideMessages(imgUrlInput, imgFeedback);
+            })
+            .catch(error => {
+                // TypeError thrown when network error or CORS issue is encountered
+                if (useProxy || !(error instanceof TypeError)) {
+                    showError(imgUrlInput, imgFeedback, 
+                        `Image could not be loaded. If you are certain
+                        the url is correct, try downloading the image and uploading using
+                        the "browse" button instead.`);
+                } else loadImageUrl(CORS_API_URL + url, true);
+            });
+    }
+
+
+    imgUrlInput.on('input', function() {
+        loadImageUrl(this.value);
     });
 
     imgFileInput.on('change', () => {
@@ -230,18 +288,14 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
 
         const imgUpload = imgFileInput.property('files')[0];
         if (imgUpload.type.includes('image')) {
-            const reader = new FileReader();
-
-            reader.onload = e => {
-                cropper.replace(e.target.result);
-            };
-            reader.readAsDataURL(imgUpload);
-
+            imageType = imgUpload.type;
+            cropper.replace(URL.createObjectURL(imgUpload));
             hideMessages(imgUrlInput, imgFeedback);
         } else {
             showError(imgUrlInput, imgFeedback, 'Uploaded file must be an image');
         }
     });
+
 
     puzzleConfigForm.on('submit', () => {
         d3.event.preventDefault();
@@ -256,7 +310,10 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
             Util.show(puzzlePage);
 
             let {width, height} = cropper.getCropBoxData();
-            splitImage(cropper.getCroppedCanvas().toDataURL(), width, height, numRows, numCols);
+
+            cropper.getCroppedCanvas().toBlob(blob => {
+                splitImage(URL.createObjectURL(blob), width, height, numRows, numCols);
+            }, imageType);
         }
     });
 
@@ -264,10 +321,10 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
     // PUZZLE PAGE
     //--------------------------------------------------------------------------------------------------------
 
+    // TODO: consider displaying loading animation in puzzle space
+    // (large puzzles like 10x10 can take a second or so to load)
     function splitImage(src, width, height, numRows, numCols) {
 
-        // TODO: stop relying on iteration limit and use memory/time limit instead
-        // (since larger puzzles make iterations take longer)
         const strings = {
             errors: {
                 unsolvable: 'Puzzle is unsolvable. Try swapping tiles in your goal and/or start state;\
@@ -279,37 +336,24 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
             }
         }
 
-        Util.show(warningDiv);
         warningMessage.text(strings.warnings.solvability);
+        Util.show(warningDiv);
 
         const maxGridHeight = 110;
         const maxGridWidth = 110;
 
-        let gridWidth, gridHeight;
+        let scale = Math.min(maxGridWidth / width, maxGridHeight / height);
 
         // preserves aspect ratio of cropped image, with largest dim set to max dim above
-        if (width > height) {
-            gridWidth = maxGridWidth;
-            gridHeight = maxGridHeight * height/width;
-        } else {
-            gridHeight = maxGridHeight;
-            gridWidth = maxGridWidth * width/height;
-        }
+        let gridWidth = scale * width,
+            gridHeight = scale * height;
 
+        // TODO: consider setting height as function of viewport height (vh) and moving to html
         const viewBox = {x: 0, y: 0, width: 300, height: gridHeight + 30};
 
         // NOTE: height not set in svg as overwritten by viewBox height scaling to width
-        const svg = puzzleContainer.append('svg')
-            .attr('width', '100%')
+        const svg = d3.select('#puzzle-svg')
             .attr('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
-
-        svg.append('defs')
-                .append('filter')
-                .attr('id', 'shadow')
-                    .append('feDropShadow')
-                    .attr('dx', 0)
-                    .attr('dy', 0)
-                    .attr('stdDeviation', 3);
 
         const gridPadding = (300 - gridWidth * 2) / 3;
 
@@ -328,12 +372,16 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
                                                 width: gridWidth
                                             }).draw();
 
+        // TODO: consider enclosing number in svg with its own viewBox to simplify
+        // ensures tile numbers stay within bounding box
         const tileNumberSize = Math.min(gridHeight / numRows / 2, gridWidth / numCols / 2);
 
         startGrid.tileNumbers.style('font-size', `${tileNumberSize}px`);
         goalGrid.tileNumbers.style('font-size', `${tileNumberSize}px`);
 
-        // NOTE: not inside Grid as not sure if want to display label
+        // TODO: consider adding to svg enclosing both self and grid to allow easy movement
+        // of both
+        // NOTE: not inside Grid as not sure if want to display label with all Grids
         // Adding label would make tile coords a little more confusing
         const startLabel = startGrid.container.append('text')
             .attr('x', startGrid.x + startGrid.width / 2)
@@ -360,71 +408,50 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
                 checkSolvability();
             });
 
-        const buttonToolbar = puzzlePage.append('div')
-                                .attr('class', 'btn-toolbar mb-2 justify-content-center');
+        const buttonToolbar = puzzlePage.select('#puzzle-button-toolbar');
 
-        const puzzleButtons = buttonToolbar.append('div')
-                                .attr('class', 'btn-group mr-2 my-1');
+        const puzzleButtons = buttonToolbar.select('#puzzle-buttons');
 
-        const overlayButtons = buttonToolbar.append('div')
-                                .attr('class', 'btn-group my-1');
+        const overlayButtons = buttonToolbar.select('#overlay-buttons');
 
-        const solutionPanel = puzzlePage.append('div')
-                                    .attr('class', 'card')
-                                    .style('display', 'none');
+        const solutionPanel = puzzlePage.select('#solution-panel');
 
-        const solutionPanelHeading = solutionPanel.append('div')
-                                        .attr('class', 'card-header')
-                                        .text('Solution');
+        const solutionPanelBody = solutionPanel.select('.card-body');
 
-        const solutionPanelBody = solutionPanel.append('div')
-                                    .attr('class', 'card-body')
-                                    .style('max-height', '100px')
-                                    .style('overflow-y', 'scroll');
+        const solvingOverlay = d3.select('#solving-overlay');
+
+        const cancelSolvingButton = d3.select('#cancel-solving-button');
 
         // NOTE: assumes starting state is solvable
-        const shuffleButton = puzzleButtons.append('button')
-            .attr('class', 'btn btn-secondary')
-            .attr('id', 'shuffle-button')
-            .property('disabled', true)
-            .text('Shuffle')
-            // don't want to pass in "this" from click
+        const shuffleButton = puzzleButtons.select('#shuffle-button')
             .on('click', () => {
                 startGrid.shuffle();
                 Util.hide(errorDiv);
             });
 
-        // TODO: consider having animations return promise that resolves after everything animated
-        // that way, can disable and enable solve/shuffle after promise resolves
-        // also add loading indication (at minimum, show loading cursor)
-        const solveButton = puzzleButtons.append('button')
-            .property('disabled', true)
-            .attr('class', 'btn btn-secondary')
-            .attr('id', 'solve-button')
-            .text('Solve')
+        const solveButton = puzzleButtons.select('#solve-button')
             .on('click', function() {
-            let puzzle = new Puzzle(numRows, numCols, Grid.getArrayRepresentation(startGrid, goalGrid),
-                startGrid.emptyPos);
+                Util.show(solvingOverlay);
 
-            try {
-                let ans = puzzle.solve();
-
-                Util.show(solutionPanel);
-                startGrid.animateMoves(ans, solutionPanelBody);
-            } catch (error) {
-                console.log(error);
-                if (error.message === 'Max number of iterations exceeded') {
+                Puzzle.solve(
+                    numRows, numCols, 
+                    Grid.getArrayRepresentation(startGrid, goalGrid),
+                    startGrid.emptyPos,
+                    {cancelPromise: new Promise(resolve => cancelSolvingButton.on('click', resolve))}
+                ).then(ans => {
+                    Util.show(solutionPanel);
+                    startGrid.animateMoves(ans, solutionPanelBody);
+                }).catch(e => {
+                    errorMessage.text(e.message);
                     Util.show(errorDiv);
-                    errorMessage.text(strings.errors.iterationLimit);
                     errorDiv.node().scrollIntoView();
-                }
-            }
+                }).then(() => {
+                    // TODO: un-comment after testing
+                    Util.hide(solvingOverlay);
+                });
         });
 
-        const resetPuzzleButton = puzzleButtons.append('button')
-            .attr('class', 'btn btn-secondary')
-            .attr('id', 'reset-puzzle-button')
-            .text('Reset')
+        const resetPuzzleButton = puzzleButtons.select('#reset-puzzle-button')
             .on('click', () => {
                 startGrid.resetTiles();
                 goalGrid.resetTiles();
@@ -439,10 +466,7 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
                 Util.hide(errorDiv);
             });
 
-        const numberOverlayButton = overlayButtons.append('button')
-            .attr('class', 'btn btn-secondary')
-            .attr('id', 'number-overlay-button')
-            .text('Show Number Overlay')
+        const numberOverlayButton = overlayButtons.select('#number-overlay-button')
             .on('click', () => {
                 startGrid.toggleNumberOverlay();
                 goalGrid.toggleNumberOverlay();
@@ -451,12 +475,7 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
                 numberOverlayButton.text(text);
             });
 
-        const toggleMouseModeButton = overlayButtons.append('button')
-            // cannot start moving tiles until one is deleted (empty position chosen)
-            .property('disabled', true)
-            .attr('class', 'btn btn-secondary')
-            .attr('id', 'toggle-mouse-mode-button')
-            .text('Tile Selection Mode')
+        const toggleMouseModeButton = overlayButtons.select('#toggle-mouse-mode-button')
             .on('click', function () {
                 startGrid.toggleTileOverlay();
                 goalGrid.toggleTileOverlay();
@@ -481,7 +500,6 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
                 return !d.grid.deleteOverlay && !d.grid.hasEmptyTile(d.tile);
             })
             .on('drag', function (d) {
-                // console.log('dragging');
 
                 d3.select(this).classed('dragging', true);
 
@@ -505,7 +523,6 @@ import '../node_modules/cropperjs/dist/cropper.min.css'
             })
             // NOTE: d3 still calls start and end on click (fires before click handler)
             .on('end', function (d) {
-                // console.log('drag end');
 
                 d3.select(this).classed('dragging', false);
 

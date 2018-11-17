@@ -1,4 +1,4 @@
-import regeneratorRuntime from "regenerator-runtime"
+import regeneratorRuntime from 'regenerator-runtime'
 
 // returns generator over values in range
 // supports range(start, end[, step]) and range(end)

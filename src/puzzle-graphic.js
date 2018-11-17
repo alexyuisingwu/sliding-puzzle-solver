@@ -269,7 +269,6 @@ class Grid {
             .classed('tile-image-container', true);
 
         if (this.imageSrc) {
-
             let images = this.tileImageContainers.append('image')
                 .attr('width', this.width)
                 .attr('height', this.height)
@@ -594,6 +593,8 @@ class Grid {
 
             if (parent) {
                 params.push(listItemsDOM[i]);
+            } else {
+                params.push(null);
             }
             if (currPromise === null) {
                 currPromise = this.animateMove(...params, durationPerMove);
@@ -630,6 +631,7 @@ class Grid {
         return new Promise(resolve => {
             if (listItem) {
                 listItem.classList.add('active-move');
+                // TODO: reconsider whether to use (might hide tile sliding on certain screen sizes)
                 listItem.scrollIntoView();
             }
             let movedTile = this.tileContainers
@@ -1059,3 +1061,5 @@ class GoalGrid extends Grid {
     }
 
 }
+
+export {Grid, StartGrid, GoalGrid}
