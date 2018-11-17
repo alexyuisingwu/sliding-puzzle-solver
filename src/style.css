@@ -1,3 +1,5 @@
+/*TODO: standardize colors and use hex codes instead of transparency (consider using sass)*/
+
 /* Restoring form warning css from earlier versions of bootstrap 4 */
 .form-control.has-warning {
 	border-color: #f0ad4e;

@@ -3,13 +3,12 @@
 // TODO: consider changing to vertical orientation if screen too narrow or input images are landscape orientation
 
 // TODO: decrease resolution of pictures to make cropping and moving tiles faster
-// TODO: consider cropping images and getting rid of svg-limit cropping for performance
+// TODO: consider cropping images for each tile and getting rid of svg-limit cropping for performance
+    // testing required though: might be worse or about the same for most reasonably sized puzzles
 
-// TODO: implement IDA* to solve 4x4 puzzles
 // TODO: implement non-optimal solver for puzzles 4x4 and larger
-// TODO: consider moving all node_modules into dev dependencies since they are bundled
 
-// TODO: consider implementing "play" button disabling drag/select and only allowing arrow key movement and change drag/click to animate moves to neighboring tiles
+// TODO: consider implementing "play" mode disabling drag/select and only allowing arrow key movement and change drag/click to animate moves to neighboring tiles
 
 // just importing from cropperjs uses un-minified version
 import Cropper from '../node_modules/cropperjs/dist/cropper.min.js'
@@ -26,11 +25,6 @@ import isURL from 'validator/lib/isURL'
 // possibility: store image as blob in localStorage, then just link to puzzle page
 // alternatively, look into postMessage between Windows
 
-// TODO: display fixed semi-transparent overlay during Worker execution to prevent user interaction
-// (add button to cancel puzzle solving at any time)
-// implementation: consider adapting QueryableWorker from mdn example to allow clean instantiation
-// of new workers after termination due to timeout
-// alternative: wrap solve() in Promise within worker, allowing worker to handle cancellation message
 (() => {
     // proxy server used to circumvent blocking of cross-origin requests by CORS
     const CORS_API_URL = 'https://cors-anywhere-alexyuisingwu.herokuapp.com/';
@@ -198,17 +192,17 @@ import isURL from 'validator/lib/isURL'
                 'Cannot create puzzle with more than 400 tiles (may crash your browser)'};
         }
 
-        if (numTiles > 12) {
+        if (numTiles > 16) {
 
             return {status: 'warning', message:
-                'Caution: this site may not be able to optimally solve puzzles with more than 12 tiles'};
+                'Caution: this site may not be able to optimally solve puzzles with more than 16 tiles'};
         }
 
-        if ((numRows > 1 && numCols > 5) || (numCols > 1 && numRows > 5)) {
+        if ((numRows > 1 && numCols > 6) || (numCols > 1 && numRows > 6)) {
 
             return {status: 'warning', message:
                 'Caution: this site may not be able to optimally solve 2D puzzles with a dimension\
-                > 5'};
+                > 6'};
         }
         
         return {status: 'valid'};
@@ -429,6 +423,10 @@ import isURL from 'validator/lib/isURL'
                 Util.hide(errorDiv);
             });
 
+        // TODO: disable puzzle interaction during sliding animation
+        // possibility: just use a transparent div overlay to catch all pointer events
+        //  - extends up to solution panel
+        //  - changes cursor to not-allowed
         const solveButton = puzzleButtons.select('#solve-button')
             .on('click', function() {
                 Util.show(solvingOverlay);
