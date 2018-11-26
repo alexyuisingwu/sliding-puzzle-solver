@@ -609,7 +609,7 @@ class Grid {
                 }
             }
         }
-
+        return currPromise;
     }
 
     // TODO: consider using d3's transition syntax rather than Promise wrapping

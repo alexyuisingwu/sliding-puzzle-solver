@@ -23,6 +23,19 @@
 	0% {transform: rotate(0deg);}
 	100% {transform: rotate(360deg);}
 }
+/*-----------------------------------------------------------------*/
+
+#animating-moves-overlay {
+	cursor: not-allowed;
+	opacity: 0; 
+	width: 100%; 
+	height: 100%; 
+	position: absolute; 
+	top: 0; 
+	/*z-index necessary to stop solve button
+	from coming to front (bootstrap button focus)*/
+	z-index:1;
+}
 
 h1 {
 	color: gray;
@@ -43,7 +56,7 @@ h1 {
 	flex-direction: column;
 	justify-content: center;
 	/*while relative positioning already works, z-index necessary to stop solve button
-	 from coming to front (bootstrap button focus)*/
+	from coming to front (bootstrap button focus)*/
 	z-index: 1;
 	/*cursor: progress;*/
 }
@@ -63,9 +76,9 @@ h1 {
 .warning-feedback {
 	display: none;
 	width: 100%;
-    margin-top: .25rem;
-    font-size: 80%;
-    color: #dc3545;
+	margin-top: .25rem;
+	font-size: 80%;
+	color: #dc3545;
 	color: #f0ad4e;
 }
 
@@ -153,38 +166,38 @@ h1 {
 	display: initial;
 	fill: red;
 	opacity: 0.5;
-}*/
+	}*/
 
 /*.tile-container:hover .select-overlay {
 	display: initial;
 	fill: steelblue;
 	opacity: 0.5;
-}*/
+	}*/
 
-.delete-overlay {
-	visibility: visible;
-	fill: red;
-	opacity: 0.5;
-	cursor:pointer;
-}
+	.delete-overlay {
+		visibility: visible;
+		fill: red;
+		opacity: 0.5;
+		cursor:pointer;
+	}
 
-.select-overlay {
-	visibility: visible;
-	fill: steelblue;
-	opacity: 0.5;
-	cursor:pointer;
-}
+	.select-overlay {
+		visibility: visible;
+		fill: steelblue;
+		opacity: 0.5;
+		cursor:pointer;
+	}
 
-/*consider moving to outside and decreasing width of list-item*/
-.move-list {
-	list-style: decimal inside;
-}
+	/*consider moving to outside and decreasing width of list-item*/
+	.move-list {
+		list-style: decimal inside;
+	}
 
-.move-list-item {
-	display: list-item;
-}
+	.move-list-item {
+		display: list-item;
+	}
 
-/* used instead of bootstrap 4 active as color less intense and pairs better with theme*/
-.active-move {
-	background: lightblue;
-}
+	/* used instead of bootstrap 4 active as color less intense and pairs better with theme*/
+	.active-move {
+		background: lightblue;
+	}

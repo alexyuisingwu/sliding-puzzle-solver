@@ -235,12 +235,13 @@ import isURL from 'validator/lib/isURL'
             }
         }
 
+        // TODO: consider adding loading indication in case image loading takes a while
+        // (like when heroku cors server is first woken up)
+
         // NOTE: not checking for image url before fetching because
         // HTML standard doesn't specify accepted image formats, 
         // so can differ between browsers
 
-        // TODO: make sure cors redirect only fires if url valid but cors error,
-        // not if 404 error
         fetch(url, {
             mode: 'cors',
             credentials: 'omit'
@@ -316,7 +317,7 @@ import isURL from 'validator/lib/isURL'
     //--------------------------------------------------------------------------------------------------------
 
     // TODO: consider displaying loading animation in puzzle space
-    // (large puzzles like 10x10 can take a second or so to load)
+    // (large puzzles and/or images can take a second or so to load)
     function splitImage(src, width, height, numRows, numCols) {
 
         const strings = {
@@ -414,6 +415,8 @@ import isURL from 'validator/lib/isURL'
 
         const solvingOverlay = d3.select('#solving-overlay');
 
+        const animatingMovesOverlay = d3.select('#animating-moves-overlay');
+
         const cancelSolvingButton = d3.select('#cancel-solving-button');
 
         // NOTE: assumes starting state is solvable
@@ -423,10 +426,6 @@ import isURL from 'validator/lib/isURL'
                 Util.hide(errorDiv);
             });
 
-        // TODO: disable puzzle interaction during sliding animation
-        // possibility: just use a transparent div overlay to catch all pointer events
-        //  - extends up to solution panel
-        //  - changes cursor to not-allowed
         const solveButton = puzzleButtons.select('#solve-button')
             .on('click', function() {
                 Util.show(solvingOverlay);
@@ -437,15 +436,20 @@ import isURL from 'validator/lib/isURL'
                     startGrid.emptyPos,
                     {cancelPromise: new Promise(resolve => cancelSolvingButton.on('click', resolve))}
                 ).then(ans => {
+                    Util.hide(solvingOverlay);
                     Util.show(solutionPanel);
-                    startGrid.animateMoves(ans, solutionPanelBody);
+                    // disable puzzle interaction while animating solution
+                    Util.show(animatingMovesOverlay);
+
+                    return startGrid.animateMoves(ans, solutionPanelBody);
+                }).then(() => {
+                    Util.hide(animatingMovesOverlay);
                 }).catch(e => {
+                    Util.hide(solvingOverlay);
+
                     errorMessage.text(e.message);
                     Util.show(errorDiv);
                     errorDiv.node().scrollIntoView();
-                }).then(() => {
-                    // TODO: un-comment after testing
-                    Util.hide(solvingOverlay);
                 });
         });
 

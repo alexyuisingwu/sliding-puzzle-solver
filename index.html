@@ -100,27 +100,33 @@
         <div id="puzzle-page" style="display: none">
             <!-- TODO: find out point of puzzle-container, eliminate if unnecessary -->
                 <!-- viewbox set dynamically -->
-            <svg id="puzzle-svg" style="width: 100%">
-                <defs>
-                    <filter id="shadow">
-                        <feDropShadow dx="0" dy="0" stdDeviation="3"/>
-                    </filter>
-                </defs>
 
-            </svg>
+            <div id="interactable-puzzle" style="position:relative">
+                <svg id="puzzle-svg" style="width: 100%">
+                    <defs>
+                        <filter id="shadow">
+                            <feDropShadow dx="0" dy="0" stdDeviation="3"/>
+                        </filter>
+                    </defs>
 
-            <div id="puzzle-button-toolbar" class="btn-toolbar mb-2 justify-content-center">
-                <div id="puzzle-buttons" class="btn-group mr-2 my-1">
-                    <button id="shuffle-button" class="btn btn-secondary" disabled>Shuffle</button>
-                    <button id="solve-button" class="btn btn-secondary" disabled>Solve</button>
-                    <button id="reset-puzzle-button" class="btn btn-secondary">Reset</button>
+                </svg>
+
+                <div id="puzzle-button-toolbar" class="btn-toolbar mb-2 justify-content-center">
+                    <div id="puzzle-buttons" class="btn-group mr-2 my-1">
+                        <button id="shuffle-button" class="btn btn-secondary" disabled>Shuffle</button>
+                        <button id="solve-button" class="btn btn-secondary" disabled>Solve</button>
+                        <button id="reset-puzzle-button" class="btn btn-secondary">Reset</button>
+                    </div>
+                    <div id="overlay-buttons" class="btn-group mr-2 my-1">
+                        <button id="number-overlay-button" class="btn btn-secondary">Show Number Overlay</button>
+                        <button id="toggle-mouse-mode-button" class="btn btn-secondary" disabled>
+                            Tile Selection Mode
+                        </button>
+                    </div>
                 </div>
-                <div id="overlay-buttons" class="btn-group mr-2 my-1">
-                    <button id="number-overlay-button" class="btn btn-secondary">Show Number Overlay</button>
-                    <button id="toggle-mouse-mode-button" class="btn btn-secondary" disabled>
-                        Tile Selection Mode
-                    </button>
-                </div>
+
+                <!-- Used to disable puzzle interaction during solution animation -->
+                <div id="animating-moves-overlay" style="display:none"></div>
             </div>
 
             <div id="solution-panel" class="card" style="display: none">

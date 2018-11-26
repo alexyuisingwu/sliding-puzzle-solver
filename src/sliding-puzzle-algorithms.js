@@ -10,24 +10,8 @@
 
 // TODO: write function to time performance of different alg+heuristic combos
 
-// TODO: make solving stoppable (so stop button can be pressed on 4x4 or larger puzzles)
-
 // TODO: fix freeze when solving some 5x4 puzzles (and presumably those larger than that) using A*
 // iteration limit should work, but not working and/or iterations taking substantially more memory + longer
-
-// TODO: consider storing precomputed values in global object
-// pros: simple, makes all solve()s on same dimension puzzle faster
-// cons: memory leak that can pile up if user switches between many different puzzle dimensions
-// alternative: precompute once per Puzzle, and make sure calling functions remember to reuse
-// Puzzle instance when size is the same;
-// cons: messier, calling functions required to maintain logic for which Puzzle to use,
-// puzzle object needs method for updating it, cache can't be used between Puzzle objects
-// alternative: store cache globally/as Class property, but set object to null within Puzzle constructor
-// when puzzle dimensions change
-// pros: fairly simple, avoids memory leak, faster solving of same size puzzle
-// cons: a little messier, can't manage multiple independent Puzzles at same time with different size
-// ex: 2 puzzles with 2x2, 3x3 dimensions, cache would be reset each time one was solved
-
 
 import FastPriorityQueue from 'fastpriorityqueue'
 import ndarray from 'ndarray'
@@ -50,8 +34,6 @@ const REVERSE_MOVE_MAP = {
 // cons: probably slower than loading Map into memory
 // alternative: look into storing db as bytes, read whole db into memory at start and query from there
 // TODO: note that pattern dbs will make it difficult to allow non-square puzzles with dimensions > 4
-
-// TODO: consider precomputing LC for each possible state to reduce updates to table lookups
 
 // NOTE: methods not static to support using cached MD data specific to puzzle
 // grid not part of constructor as single heuristic passed between all grids in a given Puzzle
@@ -189,7 +171,6 @@ class ManhattanHeuristic {
     }
 }
 
-
 // NOTE: methods not static to support using cached MD data specific to puzzle
 class LinearConflictHeuristic extends ManhattanHeuristic{
 
@@ -213,6 +194,9 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
             return false;
         }
 
+        // maps size of orderings of tiles in their goal row/col to an ndarray
+        // mapping the orderings themselves to the linear conflict heuristic value
+
         // NOTE: ndarray used instead of map, as constant toString() computationally costlier
         // than indexing into ndarray
         // cons: much larger space consumption (sum of n^k from k = 1 to n)
@@ -232,7 +216,8 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         return true;
     }
 
-    // returns Generator over possible
+    // returns Generator over possible orderings of tiles in their goal rows/cols
+    // ex: [2, 1, 0] = 0th ind -> tile with goal ind of 2, 1st ind -> tile with goal ind of 1
     // NOTE: # permutations = sum of n permute k from k = 1 to n = ⌊en!−1⌋
     *_permutationHelper(n) {
         // while Int8Array goes from 0 to 255, acceptable as memory requirements
