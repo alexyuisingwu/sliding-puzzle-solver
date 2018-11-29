@@ -114,8 +114,16 @@
                 <div id="puzzle-button-toolbar" class="btn-toolbar mb-2 justify-content-center">
                     <div id="puzzle-buttons" class="btn-group mr-2 my-1">
                         <button id="shuffle-button" class="btn btn-secondary" disabled>Shuffle</button>
-                        <button id="solve-button" class="btn btn-secondary" disabled>Solve</button>
                         <button id="reset-puzzle-button" class="btn btn-secondary">Reset</button>
+                        <div class="input-group">
+                            <div class="input-group-prepend">
+                                <button id="solve-button" class="btn btn-secondary" style="border-radius:0" disabled>Solve</button>
+                            </div>
+                            <select class="custom-select" id="solve-option-select" aria-label="solving option">
+                                <option selected>Optimally</option>
+                                <option>Strategically</option>
+                            </select>
+                        </div>
                     </div>
                     <div id="overlay-buttons" class="btn-group mr-2 my-1">
                         <button id="number-overlay-button" class="btn btn-secondary">Show Number Overlay</button>

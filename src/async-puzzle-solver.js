@@ -10,7 +10,9 @@ class Puzzle {
      * @param numRows # rows in grid
      * @param numCols # columns in grid
      * @param tiles flattened array of tile ids corresponding to their locations in the unsolved puzzle
-     * (where ids = tile positions in the solved puzzle left to right, top to bottom, 0 indexed)
+     * where ids = tile positions in the solved puzzle left to right, top to bottom, 0 indexed
+     * - ex: startGrid = [b, a, c], goalGrid = [a, b, c], return = [1, 0, 2]
+     * - explanation: b = goalGrid[1], a = goalGrid[0], c = goalGrid[2]
      * @param emptyPos position of empty tile in grid
      * @param heuristic heuristic used to determine how far grid is from goal state.
      * Default heuristic is Linear Conflict, possible values are 'MD' and 'LC'

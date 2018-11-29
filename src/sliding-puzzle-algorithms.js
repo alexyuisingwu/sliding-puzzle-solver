@@ -189,7 +189,7 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         // 8 has 19,173,960 spaces (each > 1 byte given Uint8Array and overhead)
         // while precomputing still feasible for n = 9, no point as > 1D puzzles not
         // optimally solvable at that point for current solvers here
-        // ndarray also becomes too large when n = 10 (thros error)
+        // ndarray also becomes too large when n = 10 (throws error)
         if (n > 8 || this.numRows === 1 || this.numCols === 1) {
             return false;
         }
@@ -491,9 +491,6 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         return this.getUpdateDelta(newGrid, startInd, endInd, move) + newGrid.heuristicValue;
     }
 
-    // TODO: consider maintaining separate update functions for clone and no clone
-    // can be called by cloneAndApplyMove and applyMove respectively
-
     // TODO: consider splitting update into 2 parts so newGrid isn't switched back and forth in IDA*
     // (or create helper that also takes in start and end locations of tile as well as newGrid
     // for use in IDA*)
@@ -563,10 +560,7 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
 }
 
 // NOTE: separate from puzzle-graphic's Puzzles to ease testing and reduce memory cost in A*
-// TODO: consider changing numCols/numRows to numRows, numCols for clarity + consistency
 class Puzzle {
-
-    // TODO: set default solver to null after done testing so solver adaptive to puzzle size
 
     /**
      * creates new Puzzle instance
@@ -574,6 +568,8 @@ class Puzzle {
      * @param numCols # columns in grid
      * @param tiles flattened array of tile ids corresponding to their locations in the unsolved puzzle
      * (where ids = tile positions in the solved puzzle left to right, top to bottom, 0 indexed)
+     * - ex: startGrid = [b, a, c], goalGrid = [a, b, c], return = [1, 0, 2]
+     * - explanation: b = goalGrid[1], a = goalGrid[0], c = goalGrid[2]
      * @param emptyPos position of empty tile in grid
      * @param heuristic heuristic used to determine how far grid is from goal state.
      * Default heuristic is Linear Conflict, possible values are 'MD' and 'LC'
@@ -586,7 +582,7 @@ class Puzzle {
         this.numRows = numRows;
         this.numCols = numCols;
         // use less memory if possible
-        this.tiles = numRows * numCols > 256 ? Uint16Array.from(tiles): Uint8Array.from(tiles);
+        this.tiles = tiles.length > 256 ? Uint16Array.from(tiles): Uint8Array.from(tiles);
         this.emptyPos = emptyPos;
 
         let heuristicClass;
@@ -606,12 +602,20 @@ class Puzzle {
     // - solution as array of moves within (l/r/u/d)
     // - -1 if solution took too long to find
     // - null if solution could not be found
+    // NOTE: maxIterations ignored for 'strategic' option
     solve(maxIterations = 100000) {
+
         if (this.solver === 'A*') {
             return this.solveAStar(maxIterations);
         } else if (this.solver === 'IDA*') {
             return this.solveIDAStar(maxIterations);
+        } else if (this.solver === 'strategic') {
+            return this.solveStrategically();
+        } else {
+            throw new Error(`
+                {this.solver} is not a valid option. Choose between 'A*', 'IDA*', and 'strategic'.`)
         }
+        
     }
 
     solveAStar(maxIterations) {
@@ -734,12 +738,717 @@ class Puzzle {
         return minTotalDist;
     } 
 
+    // TODO: consider moving functions into closure / avoid nesting for slightly better performance
+    // (no re-instantiation on each call to solveStrategically())
+    // general strategy:
+    // # rows & # columns > 3:
+    // - solve all rows but 
+    solveStrategically() {
+
+        let grid = new StrategicGrid(this.numRows, this.numCols, this.tiles, this.emptyPos);
+        let moves = [];
+
+        let [emptyRow, emptyCol] = [grid.getTileRow(grid.emptyPos), grid.getTileCol(grid.emptyPos)];
+
+        // WARNING: does NOT update [row, col]
+        function move(moveList) {
+            for (let move of moveList) {
+                moves.push(move);
+                grid.applyMove(move);
+
+                switch (move) {
+                    case 'l':
+                        emptyCol++;
+                        break;
+                    case 'r':
+                        emptyCol--;
+                        break;
+                    case 'u':
+                        emptyRow++;
+                        break;
+                    case 'd':
+                        emptyRow--;
+                        break;
+                }
+
+            }
+        }
+
+        // moves tile into its goal
+        // NOTE: assumes puzzle filled from top or bottom, left to right
+        // WARNING: should NOT be used for filling in columns instead of rows, as assumptions
+        // will often result in invalid moves/bad solutions
+        // should NOT be used for last 2 rows of puzzles as well, as those must be solved
+        // column by column (solving a single row leaves remaining row no room to maneuver)
+        function moveTile(ind, goalInd) {
+            if (ind === goalInd) return;
+
+            [emptyRow, emptyCol] = [grid.getTileRow(grid.emptyPos), grid.getTileCol(grid.emptyPos)];
+
+            let [row, col] = [grid.getTileRow(ind), grid.getTileCol(ind)];
+            let [goalRow, goalCol] = [grid.getTileRow(goalInd), grid.getTileCol(goalInd)];
+
+            // moves empty out of the way of already solved tiles
+            // explanation: if empty is in row with solved tiles, it must be to their right
+            // more specifically, it will be in the goal col of the current tile
+            // if the current tile is to the left of its goal, empty will need
+            // to move left to get to its left, displacing solved tiles
+            // unless it moves down (or a tile moves up into it) first
+            if (col < goalCol && emptyRow === goalRow) {
+                emptyRow === grid.rowEnd - 1 ? move('d') : move ('u');
+            }
+
+            while (col > goalCol) {
+                // tile needs to move left, so empty tile needs to be moved to left of tile
+
+                // empty needs to move out the way to get to the left side of the tile
+                if (row === emptyRow && emptyCol > col) {
+                    // move empty around tile to avoid moving solved tiles
+
+                    // if filling top, try to move around bottom of tile if possible
+                    if (goalRow === grid.rowStart) {
+                        row === grid.rowEnd - 1 ? move('d') : move('u');
+                    } else if (goalRow === grid.rowEnd - 1) {
+                        // if filling bottom, try to move around top of tile if possible
+                        row === grid.rowStart ? move('u') : move('d');
+                    }
+
+                }
+
+                // move empty to col left of tile
+                while (emptyCol >= col) move('r');
+                while (emptyCol < col - 1) move('l');
+
+                // move empty to row of tile
+                while (emptyRow > row) move ('d');
+                while (emptyRow < row) move ('u');
+
+                // move tile left
+                move('l');
+                col--;
+            }
+
+            while (col < goalCol) {
+                // tile needs to move right, so empty tile needs to be moved to right of tile
+
+                // empty needs to move out the way to get to the right side of the tile
+                if (row === emptyRow && emptyCol < col) {
+                    // move empty around tile to avoid moving solved tiles
+
+                    // if filling top, try to move around bottom of tile if possible
+                    if (goalRow === grid.rowStart) {
+                        row === grid.rowEnd - 1 ? move('d') : move('u');
+                    } else if (goalRow === grid.rowEnd - 1) {
+                        // if filling bottom, try to move around top of tile if possible
+                        row === grid.rowStart ? move('u') : move('d');
+                    }
+                }
+
+                // move empty to right of tile
+                while (emptyCol <= col) move('l');
+                while (emptyCol > col + 1) move('r');
+
+                // move empty to row of tile
+                while (emptyRow > row) move ('d');
+                while (emptyRow < row) move ('u');
+
+                // move tile right
+                move('r');
+                col++;
+            }
+
+            // tile now in correct column
+
+            while (row > goalRow) {
+                // tile needs to move up, so the empty tile needs to be moved to top of tile
+
+                // can move up normally as long as
+                // - not last tile in row
+                // - tile is more than 2 tiles below goal
+                if (col !== grid.colEnd - 1 || row - 2 > goalRow){
+                    // if row is 1 below goal and empty is to the left or below tile
+                    // empty must rotate around the bottom of the tile to get to the top
+                    // so as not to displace previously placed tiles
+                    if (row - 1 === goalRow && emptyCol <= col && emptyRow >= row) {
+
+                        // move emptyRow below row
+                        while (emptyRow <= row) move('u');
+
+                        // move emptyCol to right of tile
+                        while (emptyCol <= col) move('l');
+                    }
+
+                    // NOTE: necessary despite code block above as tile could be against wall
+
+                    // if empty under tile, move to the right if possible
+                    // to avoid displacing previously placed tiles
+                    if (emptyRow > row && emptyCol === col) {
+                        col === grid.colEnd - 1 ? move('r') : move('l');
+                    }
+
+                    // move empty row to just above tile
+                    while (emptyRow >= row) move('d');
+                    while (emptyRow < row - 1) move('u');
+
+                    // move empty col to match tile's
+                    while (emptyCol > col) move('r');
+                    while (emptyCol < col) move('l');
+
+                    // move tile up
+                    move('u');
+                    row--;
+                }  
+                // last tile of row must be rotated in along with previous tile in row
+                // because rotating affects tiles on one side of a tile
+                // and at the last column, only the left column's tiles can be used for rotation
+                else {
+                    // tile in last col and row - 2 <= goalRow
+
+                    if (row - 1 === goalRow) {
+                        // move directly into goal:
+                        // if empty in goalRow, must be directly above tile
+                        // as previously tiles already solved
+                        if (emptyRow === goalRow) {
+                            move('u');
+                            return;
+                        } else {
+                            // move tile down one to give room to maneuver previous tile 
+                            // above it
+
+                            // NOTE: empty must be to left and/or below tile
+                            // as tile is in rightmost column and 1 space below the top
+                            // and empty is not above it
+
+                            // position empty below tile
+                            while (emptyRow <= row) move('u');
+                            while (emptyCol < col) move('l');
+
+                            // move tile down
+                            move('d');
+                            row++;
+                        }
+                    }
+
+                    // tile is in last col and row - 2 === goalRow
+
+                    // move previous tile into current goal
+
+                    // move empty around tile to get up to previous tile
+                    if (emptyRow > row && emptyCol === col) move('r');
+
+                    // avoid previously solved tiles while going up and around tile
+                    while (emptyRow > goalRow + 1) move('d');
+                    while (emptyCol < goalCol) move('l');
+
+                    // move empty to goal position
+                    while (emptyRow > goalRow) move('d');
+
+                    // current state:
+                    // tile 2 spaces below goal
+                    // previous tiles in their goals
+                    // empty tile 1 space right of previous tile (current tile's goal position)
+
+                    // rotate last 2 tiles in row into place
+                    move('rulurddlu');
+
+                    row = goalRow;
+                } 
+            }
+
+            while (row < goalRow) {
+                // tile needs to move down, so the empty tile needs to be moved to bottom of tile
+
+                if (col !== grid.colEnd - 1 || row + 2 < goalRow){
+
+                    // empty needs to move out of the way to get to the bottom of the tile
+                    // as is currently to tile's top/left and needs to move to tile's bottom
+                    if (row + 1 === goalRow && emptyCol <= col && emptyRow <= row) {
+                        while (emptyRow >= row) move('d');
+                        while (emptyCol <= col) move('l');
+                    }
+
+                    // move empty around tile if in same column and empty above tile
+                    // (different from above, as above only necessary if tile is too
+                    // close to goal and not as good a solution when tile is farther away)
+                    if (col === emptyCol && emptyRow < row) {
+                        col === grid.colEnd - 1 ? move('r') : move('l');
+                    }
+
+                    // move empty to bottom of tile
+                    while (emptyRow <= row) move('u');
+                    while (emptyRow > row + 1) move('d');
+
+                    // move empty to col of tile
+                    while (emptyCol > col) move('r');
+                    while (emptyCol < col) move('l');
+
+                    // move tile down
+                    move('d');
+                    row++;  
+                } else {
+                    // last tile of bottom row needs to be rotated in along with previous tile,
+                    // similar to last tile of top row
+
+                    // tile in correct col and either 1 or 2 spaces above goal
+
+                    if (row + 1 === goalRow) {
+                        // move tile directly into place
+                        if (emptyRow === goalRow) {
+                            move('d');
+                            return;
+                        } else {
+                            // move tile up to give room for previous tile to maneuver
+
+                            while (emptyRow >= row) move('d');
+                            while (emptyCol < col) move('l');
+
+                            move('u');
+                            row--;
+                        }
+                    }
+
+                    // tile is now 2 spaces above goal
+
+                    // move previous tile into current goal
+
+                    // move empty around tile to get up to previous tile
+                    if (emptyRow < row && emptyCol === col) move('r');
+
+                    while (emptyRow < goalRow - 1) move('u');
+                    while (emptyCol < goalCol) move('l');
+
+                    // move empty to goal position
+                    while (emptyRow < goalRow) move('u');
+
+                    // curent state:
+                    // tile 2 spaces above goal
+                    // previous tiles in goal
+                    // empty tile 1 space right of previous tile (current tile's goal position)
+
+                    // rotate last 2 tiles into place
+                    move('rdldruuld');
+
+                    row = goalRow;
+                }        
+            }
+        }
+
+        let emptyGoal = grid.tiles[grid.emptyPos];
+
+        // solves 1 dimensional puzzles
+        if (grid.numRows === 1) {
+            while (grid.emptyPos < emptyGoal) move('l');
+            while (grid.emptyPos > emptyGoal) move('r');
+            return moves;
+        } else if (grid.numCols === 1) {
+            while (grid.emptyPos < emptyGoal) move ('u');
+            while (grid.emptyPos > emptyGoal) move('d');
+            return moves;
+        }
+
+        let emptyGoalRow = grid.getTileRow(emptyGoal);
+        let emptyGoalCol = grid.getTileCol(emptyGoal);
+
+        // fill each row left to right, top to bottom until empty tile's row reach
+        // or 2 rows remaining
+        for (let row = 0; row < Math.min(emptyGoalRow, grid.numRows - 2); row++) {
+            let start = grid.numCols * row;
+
+            for (let goal = start; goal < start + grid.numCols; goal++) {
+                let ind = grid.goals[goal];
+
+                moveTile(ind, goal);
+            }
+
+            grid.rowStart++;
+        }
+
+        for (let row = grid.numRows - 1; row > emptyGoalRow + 1; row--) {
+            let start = grid.numCols * row;
+
+            for (let goal = start; goal < start + grid.numCols; goal++) {
+                let ind = grid.goals[goal];
+
+                moveTile(ind, goal);
+            }
+            grid.rowEnd--;
+        }
+
+        // remaining unsolved puzzle is now 2xN (where N is arbitrary integer)
+
+        let emptyColGoal = grid.getTileCol(grid.tiles[grid.emptyPos]);
+
+        // fill in from left to right until empty tile col reached or 2x2 square remaining
+        for (let col = 0; col < Math.min(grid.numCols - 2, emptyColGoal); col++) {
+
+            // goal and current indices of top tile of leftmost column
+            let topGoal = grid.getIndex(grid.rowStart, grid.colStart);
+            let topInd = grid.goals[topGoal];
+
+            // move top tile to its goal
+            moveTile(topInd, topGoal);
+
+            // goal and current indices of bottom tile of leftmost column
+            let bottomGoal = topGoal + grid.numCols;
+            let bottomInd = grid.goals[bottomGoal];
+
+            if (bottomInd === bottomGoal) {
+                grid.colStart++;
+                continue;
+            }
+
+            // current coords of tile that belongs on the bottom of the leftmost column
+            let bottomCol = grid.getTileCol(bottomInd);
+            let bottomRow = grid.getTileRow(bottomInd);
+
+            // top tile is occupied, so emptyCol must be in bottom left corner
+            // if bottom tile is one away, can move directly into goal
+            if (emptyCol === grid.colStart && grid.emptyPos + 1 === bottomInd) {
+                move('l');
+                grid.colStart++;
+                continue;
+            }
+
+            // Otherwise:
+            // tile needs to be rotated in similarly to top and bottom tiles
+            // cannot use moveTile() as above, as certain assumptions on
+            // fill order no longer hold true
+
+            // move bottom tile to 2 spaces right of its goal
+
+            // first move tile into bottom row
+
+            while (bottomRow < grid.rowEnd - 1) {
+
+                // move into bottom row
+                if (emptyRow === grid.rowStart) move('u');
+
+                // move below tile
+                while (emptyCol > bottomCol) move('r');
+                while (emptyCol < bottomCol) move('l');
+
+                // move tile into bottom row
+                move('d');
+                bottomRow++;
+            }
+
+            // then move tile into correct col
+
+            // tile is more than 2 spaces right from final goal
+            while (bottomCol > col + 2) {
+                // move empty around tile to get to its left if necessary
+                if (emptyRow === bottomRow && emptyCol > bottomRow) move('d');
+
+                while (emptyCol >= bottomCol) move('r');
+                if (emptyRow < bottomRow) move('u');
+                while (emptyCol < bottomCol) move('l');
+
+                bottomCol--;
+            }
+
+            // tile is one right of final goal (1 tile left of intermediate goal)
+            while (bottomCol < col + 2) {
+
+                // maneuver empty to right of goal
+                if (emptyCol === bottomCol) move('l');
+                if (emptyRow === grid.rowStart) move('u');
+
+                // move bottom col one right
+                while (emptyCol > bottomCol) move('r');
+
+                bottomCol++;
+            }
+
+            // tile is now 2 spaces right of goal
+
+            // need to move top tile one down in preparation for rotating 2 tiles in
+
+            // move around tile to get below top tile if necessary
+            if (emptyCol > bottomCol && emptyRow === bottomRow) move('d');
+            while (emptyCol >= bottomCol) move('r');
+
+            if (emptyRow === grid.rowStart) move('u');
+            while (emptyCol > grid.colStart) move('r');
+
+            // current state:
+            // empty tile in bottom goal
+            // top tile in top goal
+            // bottom tile 2 tiles right of bottom goal
+
+            // rotate both tiles into place
+            move('dluldrrul');
+
+            grid.colStart++;
+        }
+
+        // // fill in from right to left until 2x2 square remaining
+        for (let col = grid.numCols - 1; col > emptyColGoal + 1; col--) {
+
+            // goal and current indices of top tile of leftmost column
+            let topGoal = grid.getIndex(grid.rowStart, grid.colEnd - 1);
+            let topInd = grid.goals[topGoal];
+
+            // move top tile to its goal
+            // NOTE: can't use moveTile as relies on assumptions like:
+            // tiles to left in goalRow are filled in and can't be modified
+            // modifying moveTile() to work with right-to-left would
+            // make the function more confusing
+
+            let topCol = grid.getTileCol(topInd);
+            let topRow = grid.getTileRow(topInd);
+
+            // move top tile into correct row
+            if (topRow > grid.rowStart) {
+                if (emptyRow === grid.rowEnd - 1) move('d');
+                while (emptyCol < topCol) move('l');
+                while (emptyCol > topCol) move('r');
+
+                move('u');
+                topRow--;
+            }
+
+            // move top tile into correct col
+            while (topCol < grid.colEnd - 1) {
+                // move empty around tile to get to right if necessary
+                if (emptyCol < topCol && emptyRow === topRow) move('u');
+
+                while (emptyCol <= topCol) move('l');
+                while (emptyCol > topCol + 1) move('r');
+
+                if (emptyRow > topRow) move('d');
+
+                move('r');
+                topCol++;
+            }
+
+            // goal and current indices of bottom tile of leftmost column
+            let bottomGoal = topGoal + grid.numCols;
+            let bottomInd = grid.goals[bottomGoal];
+
+            if (bottomInd === bottomGoal) {
+                grid.colEnd--;
+                continue;
+            }
+
+            // current coords of tile that belongs on the bottom of the leftmost column
+            let bottomCol = grid.getTileCol(bottomInd);
+            let bottomRow = grid.getTileRow(bottomInd);
+
+            // top tile is occupied, so emptyCol must be in bottom right corner
+            // if bottom tile is one away, can move directly into goal
+            if (emptyCol === grid.colEnd - 1 && grid.emptyPos - 1 === bottomInd) {
+                move('r');
+                grid.colEnd--;
+                continue;
+            }
+
+            // move bottom tile 2 tiles left of goal in preparation of rotating 2 tiles in
+
+            // first move tile into bottom row
+
+            while (bottomRow < grid.rowEnd - 1) {
+
+                // move into bottom row
+                if (emptyRow === grid.rowStart) move('u');
+
+                // move below tile
+                while (emptyCol > bottomCol) move('r');
+                while (emptyCol < bottomCol) move('l');
+
+                // move tile into bottom row
+                move('d');
+                bottomRow++;
+            }
+
+            // then move tile into correct col
+
+            // tile is more than 2 spaces left from final goal
+            while (bottomCol < col - 2) {
+                // move empty around tile to get to its right if necessary
+                if (emptyRow === bottomRow && emptyCol < bottomRow) move('d');
+
+                while (emptyCol <= bottomCol) move('l');
+                if (emptyRow < bottomRow) move('u');
+                while (emptyCol > bottomCol) move('r');
+
+                bottomCol++;
+            }
+
+            // tile is one left of final goal (1 tile right of intermediate goal)
+            while (bottomCol > col - 2) {
+
+                // maneuver empty to right of goal
+                if (emptyCol === bottomCol) move('r');
+                if (emptyRow === grid.rowStart) move('u');
+
+                // move bottom col one right
+                while (emptyCol < bottomCol) move('l');
+
+                bottomCol--;
+            }
+
+            // tile is now 2 spaces left of goal
+
+            // need to move top tile one down in preparation for rotating 2 tiles in
+
+            // move around tile to get below top tile if necessary
+            if (emptyCol < bottomCol && emptyRow === bottomRow) move('d');
+            while (emptyCol <= bottomCol) move('l');
+
+            if (emptyRow === grid.rowStart) move('u');
+            while (emptyCol < grid.colEnd - 1) move('l');
+
+            // current state:
+            // empty tile in bottom goal
+            // top tile in top goal
+            // bottom tile 2 tiles left of bottom goal
+
+            // rotate both tiles into place
+            move('drurdllur');
+
+            grid.colEnd--;
+        }
+
+        // solve remaining 2x2 puzzle
+
+        // Once 2 tiles (including empty) are solved, 
+        // remaining 2 must be already solved if puzzle is solvable
+
+        // NOTE: moveTile is only used for top-left and bottom-left tiles
+        // as fill-order assumptions mean using it for tiles on the right
+        // won't work
+
+        let topLeftGoal = grid.getIndex(grid.rowStart, grid.colStart);
+        if (topLeftGoal !== emptyGoal) {
+            // solve top-left tile
+            moveTile(grid.goals[topLeftGoal], topLeftGoal);
+
+            // if empty needs to move left, its goal is bottom-left tile
+            if (emptyCol > emptyGoalCol) {
+                if (emptyRow < emptyGoalRow) move('u');
+                move('r');
+            }
+            if (emptyCol < emptyGoalCol) move('l');
+
+            if (emptyRow > emptyGoalRow) move('d');
+            if (emptyRow < emptyGoalRow) move('u');
+        }
+
+        let bottomLeftGoal = topLeftGoal + grid.numCols;
+        if (bottomLeftGoal !== emptyGoal) {
+            // solve bottom-left tile
+            moveTile(grid.goals[bottomLeftGoal], bottomLeftGoal);
+
+            // if empty needs to move left, its goal is top-left tile
+            if (emptyCol > emptyGoalCol) {
+                if (emptyRow > emptyGoalRow) move('d');
+                move('r');
+            }
+
+            if (emptyCol < emptyGoalCol) move('l');
+
+            if (emptyRow > emptyGoalRow) move('d');
+            if (emptyRow < emptyGoalRow) move('u');
+        }
+        
+        return moves;
+    }
+
+}
+
+class BaseGrid {
+    constructor(numRows, numCols, tiles, emptyPos) {
+        this.numRows = numRows;
+        this.numCols = numCols;
+        this.tiles = tiles;
+        this.emptyPos = emptyPos;
+    }
+
+    getTileCol(ind) {
+        return ind % this.numCols;
+    }
+
+    getTileRow(ind) {
+        return Math.floor(ind / this.numCols);
+    }
+
+    getIndex(row, col) {
+        return row * this.numCols + col;
+    }
+
+    static getReversedMove(move) {
+        return REVERSE_MOVE_MAP[move];
+    }
+
+    swap(pos1, pos2) {
+        [this.tiles[pos1], this.tiles[pos2]] = [this.tiles[pos2], this.tiles[pos1]];
+    }
+
+    // returns change in index of tile to be moved after move
+    getMoveDelta(move) {
+        let moveDeltaMap = {
+            'r': 1,
+            'l': -1,
+            'u': -this.numCols,
+            'd': this.numCols
+        }
+        return moveDeltaMap[move];
+    }
+
+    // TODO: consider instead caching movedInd for every move + emptyPos combo O(n)
+    // returns index of tile that would be moved by specified move
+    getMovedInd(move) {
+        return this.emptyPos - this.getMoveDelta(move);
+    }
+
+    applyMove(move) {
+        let movedInd = this.getMovedInd(move);
+        let endInd = this.emptyPos;
+
+        this.swap(endInd, movedInd);
+        this.emptyPos = movedInd;
+    }
+}
+
+// Grid optimized for strategic solver
+class StrategicGrid extends BaseGrid{
+    constructor(numRows, numCols, tiles, emptyPos) {
+        super(numRows, numCols, tiles, emptyPos);
+
+        // maps goal index to current index
+        // ex: arr[0] = 2 -> tile with goal index 0 is now at index 2
+        this.goals = tiles.length > 256 ?
+            new Uint16Array(tiles.length): new Uint8Array(tiles.length);
+        this.tiles.forEach((goal, ind) => this.goals[goal] = ind);
+
+        // marks bounds of unsolved grid (start inclusive, end exclusive)
+        // NOTE: bounds do NOT affect any tile positions/indices
+        // i.e. indices/rows/cols are the same as if no bounds exist
+        this.rowStart = 0;
+        this.rowEnd = numRows;
+        this.colStart = 0;
+        this.colEnd = numCols;
+        this.colBounds = [0, numCols];
+    }
+
+    swap(pos1, pos2) {
+        // each goal position now corresponds with the opposite tile's swapped position
+        [this.goals[this.tiles[pos1]], this.goals[this.tiles[pos2]]] =
+        [pos2, pos1];
+
+        super.swap(pos1, pos2);
+    }
 }
 
 // TODO: consider moving validMoves to field of Class instead of instance
 // (indexed under grid dimensions)
 
-// TODO: consider having both this and graphical grid extend from same base class to reuse move functions
+// TODO: consider having both this and graphical grid extend from BaseGrid to reuse move functions
+// pros: cleaner, less redundancy
+// cons: performance hit as called functions now have to move up prototype chain
+// (not a huge problem for strategic solver, but IDA* explores a lot more nodes)
+
+// Grid optimized for A* and IDA*
 class Grid {
 
     constructor(numRows, numCols, tiles, emptyPos, heuristic, traveledDist, heuristicValue = null, 

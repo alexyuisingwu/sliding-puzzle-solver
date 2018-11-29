@@ -426,15 +426,24 @@ import isURL from 'validator/lib/isURL'
                 Util.hide(errorDiv);
             });
 
+        const solveOptionSelect = d3.select('#solve-option-select');
+
         const solveButton = puzzleButtons.select('#solve-button')
             .on('click', function() {
                 Util.show(solvingOverlay);
+                Util.hide(errorDiv);
 
+                let solveOption = solveOptionSelect.property('value');
+                let solver = solveOption === 'Strategically' ? 'strategic' : undefined;
+                
                 Puzzle.solve(
                     numRows, numCols, 
                     Grid.getArrayRepresentation(startGrid, goalGrid),
                     startGrid.emptyPos,
-                    {cancelPromise: new Promise(resolve => cancelSolvingButton.on('click', resolve))}
+                    {
+                        solver: solver,
+                        cancelPromise: new Promise(resolve => cancelSolvingButton.on('click', resolve))
+                    }
                 ).then(ans => {
                     Util.hide(solvingOverlay);
                     Util.show(solutionPanel);
@@ -446,6 +455,7 @@ import isURL from 'validator/lib/isURL'
                     Util.hide(animatingMovesOverlay);
                 }).catch(e => {
                     Util.hide(solvingOverlay);
+                    Util.hide(animatingMovesOverlay);
 
                     errorMessage.text(e.message);
                     Util.show(errorDiv);

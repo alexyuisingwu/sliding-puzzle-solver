@@ -34,7 +34,7 @@
 	top: 0; 
 	/*z-index necessary to stop solve button
 	from coming to front (bootstrap button focus)*/
-	z-index:1;
+	z-index:3;
 }
 
 h1 {
@@ -57,7 +57,7 @@ h1 {
 	justify-content: center;
 	/*while relative positioning already works, z-index necessary to stop solve button
 	from coming to front (bootstrap button focus)*/
-	z-index: 1;
+	z-index: 3;
 	/*cursor: progress;*/
 }
 

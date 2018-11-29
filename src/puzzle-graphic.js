@@ -554,7 +554,7 @@ class Grid {
     // moves = array of moves to animate ex: ['l', 'r', 'u', 'd', ...]
     // parent = optional parent element to insert list of moves in
     // durationPerMove = milliseconds it takes for single move to be animated
-    animateMoves(moves, parent = null, durationPerMove=300) {
+    animateMoves(moves, parent = null, durationPerMove=100) {
         let currPromise = null;
 
         let list, listItems, listItemsDOM;
@@ -621,7 +621,7 @@ class Grid {
     // listItem = <li> DOM element containing move string
     // - listItem highlighted when corresponding move is played
     // duration = milliseconds it takes to animate move
-    animateMove(move, listItem = null, duration=300) {
+    animateMove(move, listItem = null, duration=100) {
         if (!this.canMove(move)) {
             throw new Error(`Invalid Move: ${move}`);
         }
