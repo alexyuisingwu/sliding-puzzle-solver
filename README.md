@@ -10,7 +10,43 @@ to their liking before solving.
 ## Live Demo
 https://alexyuisingwu.github.io/sliding-puzzle-solver/
 
-**NOTE**: Currently a work in progress: things might change periodically.
+## Getting Started
+If you just want to play around with the app, head to the demo link above.
+
+### Installation
+Otherwise, you can download the project and run it locally.
+
+```
+git clone https://github.com/alexyuisingwu/sliding-puzzle-solver
+```
+
+You'll also want to use a local HTTP server to serve the directory. I recommend using Python if you have it installed, but any server should do.
+
+Python 3
+```
+python3 -m http.server
+```
+
+Python 2
+```
+python -m SimpleHTTPServer
+```
+
+After that, just go to http://0.0.0.0:8000/ (or whatever port you specify in your local server) to start running the app.
+
+### Modifying Code
+
+If you want to modify code, you'll have to install [webpack](https://webpack.js.org/), which is used to bundle up scripts.
+
+```
+npm install webpack
+```
+
+Scripts are stored in the /src directory and transformed through webpack into files in the /dist directory.
+
+After you make a modification to any file in /src, use webpack to re-bundle the scripts.
+
+It's also a good idea to install [npm](https://www.npmjs.com/) to make adding new packages and updating old ones easier.
 
 ## Solver Details
 
@@ -18,8 +54,32 @@ https://alexyuisingwu.github.io/sliding-puzzle-solver/
 Currently, this app can optimally solve puzzles whose dimensions add up to 7 or less (4x3, 5x2, etc.) within a second.
 4x4 puzzles can be solved within 2 minutes, 1 minute on average.
 
+The strategic solver can solve puzzles in linear time (usually within a few seconds for puzzles with triple digit tile counts). However, it is non-optimal and thus may produce solutions several times as long as the optimal solver. It's most useful as a visualization of a valid strategy for humans to solve sliding puzzles.
+
+Times may vary depending on your machine and browser.
+
+### Strategic Solver Strategy
+
+The strategy the strategic solver uses to solve sliding puzzles is simple enough that a human can use it too.
+
+First, the solver solves the rows of the puzzle until only 2 rows remain, moving from top to bottom first and then bottom to top (if the empty tile's goal position is not in the bottom 2 rows).
+
+Each row is solved left to right, with tiles rotating around already solved tiles to avoid displacing them.
+
+When the solver reaches the last tile of a row (tile "a" and "b"), it moves the tile "b" 2 spaces below its goal.
+Tile "a" is then brought to the right (into the last column of the row), and tile "b" is brought up to just beneath it.
+After both tiles are stacked up, the tiles can be rotated into the row by sliding first tile "a" then tile "b" into place.
+
+After only 2 rows remain, the solver switches to solving columns, moving from left to right first and then right to left (if empty tile's goal position is not in the rightmost 2 columns).
+
+Similarly, the 2 tiles in a column have to be rotated in (as one cannot place a tile without affecting the placement of tiles on at least 1 side of it). Let the top tile of a column be tile "a" and the bottom tile be tile "b".
+
+Tile "a" is first placed in its correct position (the top of the column). Then, tile "b" is brought to 2 tiles to the right of tile "a". Tile "a" is now brought down 1 tile, and finally, tile "b" is brought left one tile and the tiles can be rotated in, tile "a" first and then tile "b".
+
+When only a 2x2 unsolved square remains, the solver first solves the top left or bottom left tiles (depending on whether one tile is supposed to be empty in the goal state), and then solves the empty tile (placing it in its goal position). A human solver could simply solve any 2 tiles in the 2x2 puzzle (the above order is only due to implementation details).
+
 ### Search Algorithm
-This app uses 2 different search algorithms to solve puzzles: [A*](https://en.wikipedia.org/wiki/A*_search_algorithm) and 
+This app uses 2 different search algorithms to optimally solve puzzles: [A*](https://en.wikipedia.org/wiki/A*_search_algorithm) and 
 [IDA*](https://en.wikipedia.org/wiki/Iterative_deepening_A*). While A* generally expands less nodes than IDA*, its memory
 costs balloon as puzzles sizes increase, and costly maintenance of large queues of unexpanded nodes quickly reduces
 its performance benefits. Therefore, it is only feasible to use A* for puzzles of size 3x3 or less. IDA*
