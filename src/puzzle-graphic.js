@@ -626,13 +626,12 @@ class Grid {
             throw new Error(`Invalid Move: ${move}`);
         }
 
-        let container = listItem.parentNode.parentNode;
-
         let moveInfo = this.getMoveInfo(move);
 
         return new Promise(resolve => {
             if (listItem) {
                 listItem.classList.add('active-move');
+                let container = listItem.parentNode.parentNode;
 
                 // use instead of scrollIntoView() to allow users to navigate page freely
                 // during animation

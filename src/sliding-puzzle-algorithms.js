@@ -1076,6 +1076,9 @@ class Puzzle {
 
         // remaining unsolved puzzle is now 2xN (where N is arbitrary integer)
 
+        console.log(grid.rowStart, grid.rowEnd, grid.colStart, grid.colEnd);
+        console.log(moves);
+
         let emptyColGoal = grid.getTileCol(grid.tiles[grid.emptyPos]);
 
         // fill in from left to right until empty tile col reached or 2x2 square remaining
@@ -1137,7 +1140,7 @@ class Puzzle {
             // tile is more than 2 spaces right from final goal
             while (bottomCol > col + 2) {
                 // move empty around tile to get to its left if necessary
-                if (emptyRow === bottomRow && emptyCol > bottomRow) move('d');
+                if (emptyRow === bottomRow && emptyCol > bottomCol) move('d');
 
                 while (emptyCol >= bottomCol) move('r');
                 if (emptyRow < bottomRow) move('u');
@@ -1265,7 +1268,7 @@ class Puzzle {
             // tile is more than 2 spaces left from final goal
             while (bottomCol < col - 2) {
                 // move empty around tile to get to its right if necessary
-                if (emptyRow === bottomRow && emptyCol < bottomRow) move('d');
+                if (emptyRow === bottomRow && emptyCol < bottomCol) move('d');
 
                 while (emptyCol <= bottomCol) move('l');
                 if (emptyRow < bottomRow) move('u');
