@@ -626,13 +626,17 @@ class Grid {
             throw new Error(`Invalid Move: ${move}`);
         }
 
+        let container = listItem.parentNode.parentNode;
+
         let moveInfo = this.getMoveInfo(move);
 
         return new Promise(resolve => {
             if (listItem) {
                 listItem.classList.add('active-move');
-                // TODO: reconsider whether to use (might hide tile sliding on certain screen sizes)
-                listItem.scrollIntoView();
+
+                // use instead of scrollIntoView() to allow users to navigate page freely
+                // during animation
+                container.scrollTop = listItem.offsetTop - listItem.scrollHeight;
             }
             let movedTile = this.tileContainers
                 .filter(d => d.cell.ind === this.emptyPos - moveInfo.delta);
