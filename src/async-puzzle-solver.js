@@ -3,6 +3,8 @@
 
 import PuzzleSolverWorker from './puzzle-solver.worker'
 
+let puzzleWorker = new PuzzleSolverWorker();
+
 class Puzzle {
 
     /**
@@ -29,25 +31,28 @@ class Puzzle {
 
         return new Promise((resolve, reject) => {
 
-            let puzzleWorker = new PuzzleSolverWorker();
-
             let timeoutID;
             if (timeout !== null) {
                 timeoutID = setTimeout(() => {
+
                     puzzleWorker.terminate();
+                    puzzleWorker = new PuzzleSolverWorker();
+
                     reject(new Error(`Time limit (${timeout/1000} seconds) exceeded`));
                 }, timeout);
             }
 
             puzzleWorker.onmessage = e => {
-                puzzleWorker.terminate();
                 if (timeoutID) clearTimeout(timeoutID);
                 resolve(e.data);
             }
 
             if (cancelPromise) {
                 cancelPromise.then(() => {
+                    
                     puzzleWorker.terminate();
+                    puzzleWorker = new PuzzleSolverWorker();
+
                     if (timeoutID) clearTimeout(timeoutID);
                     reject(new Error(`Puzzle solving cancelled`));
                 });

@@ -210,6 +210,7 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         }
 
         for (let perm of this._permutationHelper(n)) {
+
             this._lc[perm.length].set(...perm, this._calculate(perm));
         }
 
@@ -230,17 +231,28 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         }
     }
 
+    // calculates linear conflict WITHOUT manhattan distance for array
     _calculate(arr) {
-        let map = new Map();
-        for (let i = 0; i < arr.length; i++) {
-            let goalInd = arr[i];
-            map.set(i, {goalInd, conflicts: new Set()});
-        }
+        if (arr.length < 2) return 0;
 
-        return this._calculateForMap(map);
+        if (this._lc) {
+            return this._lc[arr.length].get(...arr);
+        } else {
+            // See linear conflict explanation below for details on what LC is.
+            // Each tile that needs to be removed for the tiles in a row/col
+            // to move into their correct positions adds 2 to linear conflict.
+            // As the tiles in their goal positions are numbered in ascending order
+            // left to right, top to bottom, the tile orderings must be in sorted order
+            // to have no conflicts. Only tiles' relative positions matter,
+            // as tiles in correct relative position can easily move to their goal positions
+            // without stepping over neighboring tiles.
+            // Therefore, the number of conflicts, or tiles that
+            // need to be removed to, is the number of tiles needed to be removed
+            // to get an increasing subsequence.
+            // The minimum tiles to be removed is arr.length - the longest subsequence possible.
+            return (arr.length - this._longestIncreasingSubsequence(arr)) * 2;
+        }
     }
-    // TODO: consider separating lc condition check into new function for possibly better performance
-    // (less "if" checks)
 
     // calculates linear conflict of specified grid
     // optional start/end params allow specifying section of grid to calculate conflict heuristic for
@@ -283,11 +295,12 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         // (first grid.numRows entries are for rows, next grid.numCols entries for columns)
         let candidateTiles = new Map();
 
+        let ind = 0;
+
         // determines which tiles are in their goal row and/or column
         for (let row = 0; row < this.numRows; row++) {
             for (let col = 0; col < this.numCols; col++) {
 
-                let ind = grid.getIndex(row, col);
                 let goalInd = grid.tiles[ind],
                     goalRow = grid.getTileRow(goalInd),
                     goalCol = grid.getTileCol(goalInd);
@@ -306,185 +319,98 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
                     // NOTE: single tile can be candidate for both row and col conflict
                     // as tile can be part of conflict even when it's in its goal position
                     if (grid.getTileRow(goalInd) === row) {
-                        if (this._lc) {
-                            if (!candidateTiles.has(row)) {
-                                candidateTiles.set(row, []);
-                            }
-                            candidateTiles.get(row).push(goalCol);
-                        } else {
-                            if (!candidateTiles.has(row)) {
-                                candidateTiles.set(row, new Map());
-                            }
-                            candidateTiles.get(row).set(ind, {goalInd, conflicts: new Set()});
+
+                        if (!candidateTiles.has(row)) {
+                            candidateTiles.set(row, []);
                         }
+                        candidateTiles.get(row).push(goalCol);
                     }
                     if (grid.getTileCol(goalInd) === col) {
                         let key = grid.numRows + col;
-                        if (this._lc) {
-                            if (!candidateTiles.has(key)) {
-                                candidateTiles.set(key, []);
-                            }
-                            candidateTiles.get(key).push(goalRow);
-                        } else {
-                            if (!candidateTiles.has(key)) {
-                                candidateTiles.set(key, new Map());
-                            }
-                            candidateTiles.get(key).set(ind, {goalInd, conflicts: new Set()});
-                        }   
+                    
+                        if (!candidateTiles.has(key)) {
+                            candidateTiles.set(key, []);
+                        }
+                        candidateTiles.get(key).push(goalRow);
                     }
                 }
+
+                ind++;
             }
         }
 
-        // TODO: consider making custom function for update since only need to examine
-        // if tile in 1 (known) goal dimension and map also unnecessary
-        // maybe helper functions for processing each row/col?
-        // don't use helpers for regular calculate() though (probably less efficient
-        // since each tile would be iterated over twice (separately for row and col))
-        if (this._lc) {
-            // TODO: use values since keys unnecessary now
-            for (let [, arr] of candidateTiles.entries()) {
-                heuristicValue += this._lc[arr.length].get(...arr);
-            }
-        } else {
-            // row/grid.numRows + col no longer relevant and can be discarded 
-            for (let [, map] of candidateTiles.entries()) {
-                heuristicValue += this._calculateForMap(map);
-            }
+        for (let arr of candidateTiles.values()) {
+            heuristicValue += this._calculate(arr);
         }
 
         return heuristicValue;
     }
 
-    _calculateForMap(map) {
-        if (map.size < 2) {
-            return 0;
+    // TODO: consider moving to utils
+    // returns length of longest increasing subsequence in arr
+    _longestIncreasingSubsequence(arr){
+      let maxLength = 0;
+
+      // stores current longest increasing subsequence ending at each index
+      let cache = new Uint8Array(arr.length).fill(1);
+
+      // for each ending index, see if you can add the element at arr[end]
+      // to the longest sequence at a previous end (cache[prev])
+      for (let end = 0; end < arr.length; end++) {
+        for (let prev = 0; prev < end; prev++) {
+          if (arr[prev] < arr[end] && cache[prev] + 1 > cache[end]) {
+            cache[end] = cache[prev] + 1;
+          }
         }
+      }
 
-        let heuristicValue = 0;
-
-        for (let [ind1, {goalInd: goalInd1, conflicts: conflicts1}] of map) {
-            for (let [ind2, {goalInd: goalInd2, conflicts: conflicts2}] of map) {
-                if (ind2 > ind1 && goalInd2 < goalInd1) {
-                    map.get(ind1).conflicts.add(ind2);
-                    map.get(ind2).conflicts.add(ind1);
-                }
-            }
-        }
-
-        let conflictTree = new AVLTree((a, b) => {
-            if (a.ind === b.ind) return 0;
-
-            let diff = a.conflicts.size - b.conflicts.size;
-
-                // sorts by ind ascending if conflicts equal
-                // necessary to identify object by ind in tree, as node with same # conflicts
-                // as desired node can appear before desired node
-                return diff === 0 ? a.ind - b.ind : diff;
-            });
-
-        for (let [ind, {goalInd, conflicts}] of map) {
-
-            if (conflicts.size > 0) {
-                conflictTree.insert({conflicts, ind});
-            }
-        }
-
-        let tile;
-
-        while (conflictTree.size > 0) {
-            tile = conflictTree.max();
-            // NOTE: library has no option for finding and removing largest item in one step
-            // could use pop() workaround with opposite comparator, but pop also calls
-            // remove() after finding min in current version (1.4.4)
-            conflictTree.remove(tile);
-
-            // heuristic += 2 for each tile that must be removed before there are no conflicts
-            heuristicValue += 2;
-
-            for (let conflict of tile.conflicts) {
-                // corresponding conflicts of conflicting tile
-                // ex: a.conflicts = [b,c], b.conflicts = [a], corrConflicts of a = (Set) [a]
-                let corrConflicts = map.get(conflict).conflicts;
-
-                let corrObj = {conflicts: corrConflicts, ind: conflict};
-
-                conflictTree.remove(corrObj);
-
-                // NOTE: tree uses reference to same conflicts object, so conflicts updated there as well
-                corrConflicts.delete(tile.ind);
-
-                // removed and inserted to reorder based on new number of conflicts
-                if (corrConflicts.size > 0) {
-                    conflictTree.insert(corrObj);
-                }
-            }
-        }
-        return heuristicValue;
+      return Math.max(...cache);
     }
 
     // calculates LC for given row index
     // NOTE: doesn't incorporate MD
     _calculateForRow(grid, row) {
-        let candidateTiles = this._lc ? [] : new Map();
+        let candidateTiles = [];
 
+        let ind = this.numCols * row;
         for (let col = 0; col < this.numCols; col++) {
-            let ind = col + this.numCols * row;
 
             if (ind !== grid.emptyPos) {
                 let goalInd = grid.tiles[ind],
                     goalRow = grid.getTileRow(goalInd),
                     goalCol = grid.getTileCol(goalInd);
                 if (row === goalRow) {
-                    if (this._lc) {
-                        candidateTiles.push(goalCol);
-                    } else {
-                        candidateTiles.set(col, {goalInd: goalCol, conflicts: new Set()});
-                    }
+                    candidateTiles.push(goalCol);
                 }
             }
+
+            ind++;
         }
 
-        if (this._lc) {
-            if (candidateTiles.length < 2) {
-                return 0;
-            }
-            return this._lc[candidateTiles.length].get(...candidateTiles);
-        }
-
-        return this._calculateForMap(candidateTiles);
+        return this._calculate(candidateTiles);
     }
 
     // calculates LC for given column index
     // NOTE: doesn't incorporate MD
     _calculateForCol(grid, col) {
-        let candidateTiles = this._lc ? [] : new Map();
+        let candidateTiles = [];
 
+        let ind = col;
         for (let row = 0; row < this.numRows; row++) {
-            let ind = col + this.numCols * row;
 
             if (ind !== grid.emptyPos) {
                 let goalInd = grid.tiles[ind],
                     goalRow = grid.getTileRow(goalInd),
                     goalCol = grid.getTileCol(goalInd);
                 if (col === goalCol) {
-                    if (this._lc) {
-                        candidateTiles.push(goalRow);
-                    } else {
-                        candidateTiles.set(row, {goalInd: goalRow, conflicts: new Set()});
-                    }
+                    candidateTiles.push(goalRow);
                 }
             }
+
+            ind += this.numCols;
         }
 
-        if (this._lc) {
-            if (candidateTiles.length < 2) {
-                return 0;
-            }
-            return this._lc[candidateTiles.length].get(...candidateTiles);
-        }
-
-        return this._calculateForMap(candidateTiles);
+        return this._calculate(candidateTiles);
     }
 
     update(newGrid, startInd, endInd, move) {
@@ -549,6 +475,7 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         newGrid.swap(startInd, endInd);
         newGrid.emptyPos = startInd;
 
+        // adds linear conflict heuristic value to manhattan distance heuristic value
         return endVal - startVal + super.getUpdateDelta(newGrid, startInd, endInd, move);
     }
 
