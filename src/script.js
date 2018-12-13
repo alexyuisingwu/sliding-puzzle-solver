@@ -396,6 +396,8 @@ import isURL from 'validator/lib/isURL'
             .attr('width', 16)
             .attr('height', 16)
             .attr('href', 'icons/right-chevron.svg')
+            // xlink:href used for safari compatability
+            .attr('xlink:href', 'icons/right-chevron.svg')
             .classed('puzzle-arrow', true)
             .on('click', () => {
                 startGrid.cloneTilesTo(goalGrid);

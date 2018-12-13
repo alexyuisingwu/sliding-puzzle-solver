@@ -6,7 +6,7 @@
 // "Criticizing Solutions to Relaxed Models Yields Powerful Admissible Heuristics"
 // by Othar Hansson and Andrew Mayer
 
-// TODO: modify readme to explain how to use node + webpack + babel
+// TODO: consider using closure compiler for smaller bundles and faster runtime
 
 // TODO: write function to time performance of different alg+heuristic combos
 
@@ -28,12 +28,13 @@ const REVERSE_MOVE_MAP = {
 }
 
 // TODO: if using pattern database, consider encoding pattern numbers into bytes and storing in int
-// probably use 6-6-3 pattern database (while not fastest, takes up moderate amount of memory)
-// consider using IndexedDB for db storage
-// pros: simple, well-supported
-// cons: probably slower than loading Map into memory
-// alternative: look into storing db as bytes, read whole db into memory at start and query from there
-// TODO: note that pattern dbs will make it difficult to allow non-square puzzles with dimensions > 4
+// probably use 6-6-3 pattern database for 4x4 puzzles (while not fastest, takes up moderate amount of memory)
+// store db as binary file, read relevant db into memory at start and query from there
+// NOTE: pattern database may be unfeasible/require too much download/storage space in memory
+// See Korf and Felner's "Disjoint pattern database heuristics" for details
+// NOTE: storing minimum heuristic value over all possible blank positions results
+// in an INCONSISTENT heuristic (see "Inconsistent Hueristics" by Zahavi et. al and
+// 1.6-Bit Pattern Databases" by Breyer and Korf)
 
 // NOTE: methods not static to support using cached MD data specific to puzzle
 // grid not part of constructor as single heuristic passed between all grids in a given Puzzle
@@ -367,6 +368,14 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
       return Math.max(...cache);
     }
 
+
+    // TODO: consider modifying to take in 2 rows,
+    // with params specifying which col was swapped
+    // and where emptyPos is
+    // as then, candidateTiles doesn't need to be built from scratch
+    // twice
+    // Also, getUpdateDelta won't need to swap back and forth
+
     // calculates LC for given row index
     // NOTE: doesn't incorporate MD
     _calculateForRow(grid, row) {
@@ -417,6 +426,10 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         return this.getUpdateDelta(newGrid, startInd, endInd, move) + newGrid.heuristicValue;
     }
 
+    // TODO: consider storing and updating whether each tile is in its goal
+    // row and col so we can simply use those arrays rather than recalculating
+    // whether each tile is in goal col/row
+
     // TODO: consider splitting update into 2 parts so newGrid isn't switched back and forth in IDA*
     // (or create helper that also takes in start and end locations of tile as well as newGrid
     // for use in IDA*)
@@ -433,9 +446,6 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
 
         let startRow = newGrid.getTileRow(startInd),
             startCol = newGrid.getTileCol(startInd);
-
-        let startVal = 0,
-            endVal = 0;
 
         let func;
         let inds;
@@ -461,15 +471,15 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
 
         // Manhattan distance not calculated in func as only needs to be calculated
         // for single tile moved (more efficient to calculate separately)
-        endVal += func.call(this, newGrid, inds[0]);
-        endVal += func.call(this, newGrid, inds[1]);
+        let endVal = func.call(this, newGrid, inds[0]) +
+                     func.call(this, newGrid, inds[1]);
 
         // returns grid partially to pre-move state to calculate LC for relevant cols pre-move
         newGrid.swap(startInd, endInd);
         newGrid.emptyPos = endInd;
 
-        startVal += func.call(this, newGrid, inds[0]);
-        startVal += func.call(this, newGrid, inds[1]);
+        let startVal = func.call(this, newGrid, inds[0]) + 
+                       func.call(this, newGrid, inds[1]);
 
         // return grid to original state
         newGrid.swap(startInd, endInd);
@@ -585,7 +595,7 @@ class Puzzle {
             curr = q.poll();
 
             if (curr.isSolved()) {
-                console.log(iterations);
+                console.log(`Solved in ${iterations} iterations`);
                 return curr.reconstructPath();
             }
 
@@ -618,6 +628,7 @@ class Puzzle {
     }
 
     // TODO: make use of maxIterations or some other limiting function to stop freezing browser
+    // maxDepth probably better limiting factor though
     solveIDAStar(maxIterations) {
         let grid = new Grid(this.numRows, this.numCols, this.tiles, this.emptyPos, this.heuristic, 0);
 
@@ -639,6 +650,7 @@ class Puzzle {
         return null;
     }
 
+    // recursive helper for solveIDAStar
     _searchIDAStar(grid, path, traveledDist, bound) {
 
         let totalDist = traveledDist + grid.heuristicValue;
@@ -1002,9 +1014,6 @@ class Puzzle {
         }
 
         // remaining unsolved puzzle is now 2xN (where N is arbitrary integer)
-
-        console.log(grid.rowStart, grid.rowEnd, grid.colStart, grid.colEnd);
-        console.log(moves);
 
         let emptyColGoal = grid.getTileCol(grid.tiles[grid.emptyPos]);
 
@@ -1416,7 +1425,7 @@ class Grid {
 
     // returns change in index of tile to be moved after move
     getMoveDelta(move) {
-        let moveDeltaMap = {
+        const moveDeltaMap = {
             'r': 1,
             'l': -1,
             'u': -this.numCols,
@@ -1470,7 +1479,9 @@ class Grid {
         newGrid.lastGrid = this;
         newGrid.lastMove = move;
 
-        return Grid._applyMoveHelper(move, newGrid);
+        newGrid._applyMoveHelper(move);
+
+        return newGrid;
     }
 
     // Applies move to grid NOT clone on grid
@@ -1482,7 +1493,7 @@ class Grid {
         let oldHeuristicValue = this.heuristicValue;
         let oldEmptyPos = this.emptyPos;
 
-        Grid._applyMoveHelper(move, this);
+        this._applyMoveHelper(move);
 
         // TODO; consider changing to typedArray for slightly better performance
         return {heuristicValue: oldHeuristicValue, emptyPos: oldEmptyPos};
@@ -1498,17 +1509,16 @@ class Grid {
     }
 
     // applies move to specified grid WITHOUT updating lastMove or lastGrid
-    static _applyMoveHelper(move, grid) {
-        let movedInd = grid.getMovedInd(move);
-        let endInd = grid.emptyPos;
+    _applyMoveHelper(move) {
+        let movedInd = this.getMovedInd(move);
+        let endInd = this.emptyPos;
 
-        grid.swap(endInd, movedInd);
-        grid.emptyPos = movedInd;
+        this.swap(endInd, movedInd);
+        this.emptyPos = movedInd;
 
-        grid.traveledDist++;
+        this.traveledDist++;
 
-        grid.heuristicValue = grid.heuristic.update(grid, movedInd, endInd, move);
-        return grid;
+        this.heuristicValue = this.heuristic.update(this, movedInd, endInd, move);
     }
 
     /**
@@ -1529,18 +1539,13 @@ class Grid {
             let row = this.getTileRow(emptyPos);
             let col = this.getTileCol(emptyPos);
 
-            if (row < this.numRows - 1) {
-                moves.push('u');
-            }
-            if (row > 0) {
-                moves.push('d');
-            }
-            if (col < this.numCols - 1) {
-                moves.push('l');
-            }
-            if (col > 0) {
-                moves.push('r');
-            }
+            if (row < this.numRows - 1) moves.push('u');
+            
+            if (row > 0) moves.push('d');
+            
+            if (col < this.numCols - 1) moves.push('l');
+            
+            if (col > 0) moves.push('r');
 
             validMoves[emptyPos] = moves;
         }
