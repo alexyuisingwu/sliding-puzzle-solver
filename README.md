@@ -38,15 +38,14 @@ After that, just go to http://0.0.0.0:8000/ (or whatever port you specify in you
 
 If you want to modify code, you'll have to install [webpack](https://webpack.js.org/), which is used to bundle up scripts.
 
-```
-npm install webpack
-```
-
 Scripts are stored in the /src directory and transformed through webpack into files in the /dist directory.
 
 After you make a modification to any file in /src, use webpack to re-bundle the scripts.
 
-It's also a good idea to install [npm](https://www.npmjs.com/) to make adding new packages and updating old ones easier.
+You'll also need [npm](https://www.npmjs.com/) to to get all the dependencies you need. In the root directory, enter:
+```
+npm install
+```
 
 ## Solver Details
 
