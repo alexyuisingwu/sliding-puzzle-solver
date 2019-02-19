@@ -1,6 +1,8 @@
 // NOTE: located in separate file from sliding-puzzle-algorithms to avoid problems with
 // circular dependencies and webpack loaders (still relevant when using inline workers)
 
+// TODO: consider making non-static, and add cancel method to be called in script.js instead
+
 import PuzzleSolverWorker from './puzzle-solver.worker'
 
 let puzzleWorker = new PuzzleSolverWorker();
@@ -26,7 +28,7 @@ class Puzzle {
      * @param cancelPromise promise that stops solve attempt upon resolve
      */
     static solve(numRows, numCols, tiles, emptyPos, 
-        {heuristic = 'LC', solver = numRows * numCols > 9 ? 'IDA*' : 'A*', timeout = 120000,
+        {heuristic = undefined, solver = undefined, timeout = 120000,
         cancelPromise} = {}) {
 
         return new Promise((resolve, reject) => {

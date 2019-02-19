@@ -25,6 +25,14 @@ import isURL from 'validator/lib/isURL'
 // possibility: store image as blob in localStorage, then just link to puzzle page
 // alternatively, look into postMessage between Windows
 
+// TODO: consider adding options modal for details such as:
+//  - animation speed
+//  - colors (outline, number overlay)
+//  - changing dimensions
+//  - changing image
+
+// TODO: consider adding help button for details on how to use app
+
 (() => {
     // proxy server used to circumvent blocking of cross-origin requests by CORS
     const CORS_API_URL = 'https://cors-anywhere-alexyuisingwu.herokuapp.com/';

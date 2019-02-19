@@ -6,6 +6,8 @@
 // "Criticizing Solutions to Relaxed Models Yields Powerful Admissible Heuristics"
 // by Othar Hansson and Andrew Mayer
 
+// TODO: remove A* solving option to allow IDA* solving to be cleaner (applyMove() and reversing move, can rely on knowing states traveled and reversed in straight line)
+
 // TODO: consider using closure compiler for smaller bundles and faster runtime
 
 // TODO: write function to time performance of different alg+heuristic combos
@@ -15,7 +17,6 @@
 
 import FastPriorityQueue from 'fastpriorityqueue'
 import ndarray from 'ndarray'
-import AVLTree from 'avl'
 
 import {range, permutationGenerator} from './math-utils'
 import regeneratorRuntime from 'regenerator-runtime'
@@ -36,6 +37,20 @@ const REVERSE_MOVE_MAP = {
 // in an INCONSISTENT heuristic (see "Inconsistent Hueristics" by Zahavi et. al and
 // 1.6-Bit Pattern Databases" by Breyer and Korf)
 
+// Tentative pdb implementation:
+// each relevant puzzle dimension combo will have a folder (e.g. 4x4, 2x6, etc.)
+// each puzzle folder will have 1 or more pdbs
+// each pdb will be stored in a folder with partition split (e.g. 6-6-3)
+// each folder will have 1 file per partition, with name indicating tiles in partition
+// each file will map current position of tile in puzzle to heuristic value
+// If iterating through files in folder without knowing file names impossible for frontend javascript,
+// add informational file with set name to folder(s)
+// problem: seems very inefficient, especially when numbers are non-contiguous and don't start from 1
+// solution: map permutations to lexicographic ordering index of permutations 
+//     cons: more complicated to find index, probably not worth it due to performance concerns
+// other solution: hashMap
+// cons: performance bad (javascript hashing relies on conversion to string)
+
 // NOTE: methods not static to support using cached MD data specific to puzzle
 // grid not part of constructor as single heuristic passed between all grids in a given Puzzle
 class ManhattanHeuristic {
@@ -45,14 +60,17 @@ class ManhattanHeuristic {
         this.numCols = numCols;
         this.numTiles = numRows * numCols;
 
-        this._precompute();
-
+        // TODO: consider changing moves to constants or enums
         this.moveNumberMap = {
             'l': 0,
             'r': 1,
             'u': 2,
             'd': 3
         }
+    }
+
+    async initialize() {
+        this._precompute();
     }
 
     // TODO: change so precompute called once for all puzzles of same size
@@ -202,12 +220,12 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
         // than indexing into ndarray
         // cons: much larger space consumption (sum of n^k from k = 1 to n)
         // consumes 19,173,960 spaces (each > 1 byte given Uint8Array and overhead) when n = 8
-        this._lc = new Array(n);
+        this._lc = [null];
         for (let permSize = 1; permSize <= n; permSize++) {
-            this._lc[permSize] = ndarray(
+            this._lc.push(ndarray(
                 new Uint8Array(n ** permSize),
                 new Uint8Array(permSize).fill(n)
-            )
+            ));
         }
 
         for (let perm of this._permutationHelper(n)) {
@@ -496,6 +514,141 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
     }
 }
 
+class PatternDatabaseHeuristic {
+
+    constructor(numRows, numCols, emptyPos) {
+        this.numRows = numRows;
+        this.numCols = numCols;
+        this.numTiles = numRows * numCols;
+        this.emptyPos = emptyPos;
+
+        this.partitions = [];
+        this.dbs = [];
+    }
+
+    async initialize() {
+        return this._loadDatabase(this.emptyPos);
+    }
+
+    // TODO: make sure to wait until _loadDatabase complete
+    // before allowing solve
+    async _loadDatabase(emptyPos) {
+        // NOTE: can't return outer fetch
+        let loadPromise;
+        // NOTE: not using escape character at end of line
+        // as spaces preceding next line would be included
+        let directory = '../databases'
+                + `/${this.numRows} rows`
+                + `/${this.numCols} columns`
+                + `/Empty ${emptyPos}`;
+
+        let response = await fetch(directory + '/info.json');
+        let json;
+        if (response.ok) {
+            json = await response.json();
+        } else {
+            throw new Error('Database info json could not be loaded');
+        }  
+
+        let promises = [];
+
+        for (let partition of json['partitions']) {
+            let fileName = `${emptyPos}|`
+                + partition.join(',')
+                + '.db';
+
+            // NOTE: not using await to let each fetch request execute asynchronously
+            promises.push(fetch(directory + '/' + fileName)
+                .then(response => {
+                    // TODO: confirm that partitions and dbs
+                    // sent in correct order
+                    // (since using async promises)
+                    console.log(response);
+                    if (response.ok) {
+                        return response.arrayBuffer();
+                    } else {
+                        throw new Error('Database could not be loaded');
+                    }
+                }).then(buffer => {
+                    // NOTE: partitions added here instead of at start to ensure async addition of dbs line up
+                    this.partitions.push(partition);
+                    this.dbs.push(ndarray(
+                        new Uint8Array(buffer), 
+                        new Uint8Array(partition.length).fill(this.numTiles)));
+                }));
+        }
+
+        console.log(json);
+        console.log(promises);
+
+        await Promise.all(promises);
+
+    }
+
+    // TODO: see why solution lengths too long
+    // (calculate probably returning wrong value)
+    // PROGRESS: some partition combos add up to >80
+    // (either problem with interpretation here or problem
+    // with calculation in Java)
+
+    // ex:
+    // [0, 8, 10, 4, 3, 15, 14, 11, 7, 6, 5, 1, 2, 9, 12, 13]
+    // heuristicValue = 89
+    // indices = [14, 15, 6] part = [12, 13, 14], h = 16
+    // inds = [11, 12, 3, 10, 1, 13] parts = [1, 2, 4, 5, 8, 9] => 38
+    // inds = [4, 9, 8, 2, 7, 5] parts = [3, 6, 7, 10, 11, 15] => 35
+    calculate(grid) {
+
+        let heuristicValue = 0;
+
+        let goalMap = new Uint8Array(this.numRows * this.numCols);
+
+        grid.tiles.forEach((goalInd, ind) => {
+            goalMap[goalInd] = ind;
+        });
+
+        this.partitions.forEach((partition, ind) => {
+
+            // for each goal index, find current position of goal in grid.tiles
+            let indices = partition.map(goalInd => goalMap[goalInd]);
+
+            // TODO: fold into 1 statement after testing
+            let temp = this.dbs[ind].get(...indices);
+
+            heuristicValue += temp;
+        });
+
+        // TODO: delete after testing
+        if (heuristicValue > 80) {
+            console.log(this.dbs);
+            console.log(this.partitions);
+            console.log(grid.tiles);
+
+            // this.partitions.forEach((partition, ind) => {
+
+            //     // for each goal index, find current position of goal in grid.tiles
+            //     let indices = partition.map(goalInd => goalMap[goalInd]);
+
+            //     // TODO: fold into 1 statement after testing
+            //     let temp = this.dbs[ind].get(...indices);
+
+            //     heuristicValue += temp;
+            // });
+
+            throw new Error('4x4 grid cannot be >80 moves away from goal');
+        }
+        return heuristicValue;
+    }
+
+    update(newGrid) {
+        return this.calculate(newGrid);
+    }
+
+    isSolved(heuristicValue) {
+        return heuristicValue === 0;
+    }
+}
+
 // NOTE: separate from puzzle-graphic's Puzzles to ease testing and reduce memory cost in A*
 class Puzzle {
 
@@ -527,32 +680,46 @@ class Puzzle {
             case 'MD':
                 heuristicClass  = ManhattanHeuristic;
                 break;
+            case 'LC':
+                heuristicClass = LinearConflictHeuristic;
+                break;
+            case 'PDB':
+                heuristicClass = PatternDatabaseHeuristic;
+                break;
             default:
                 heuristicClass = LinearConflictHeuristic;
         }
 
-        this.heuristic = new heuristicClass(numRows, numCols);
+        this.heuristic = new heuristicClass(numRows, numCols, emptyPos);
+
         this.solver = solver;
     }
+
+    // TODO: consider changing maxIterations to maxNodesExpanded for clarity
 
     // returns
     // - solution as array of moves within (l/r/u/d)
     // - -1 if solution took too long to find
     // - null if solution could not be found
     // NOTE: maxIterations ignored for 'strategic' option
-    solve(maxIterations = 100000) {
+    async solve(maxIterations = 100000) {
 
-        if (this.solver === 'A*') {
-            return this.solveAStar(maxIterations);
-        } else if (this.solver === 'IDA*') {
-            return this.solveIDAStar(maxIterations);
-        } else if (this.solver === 'strategic') {
-            return this.solveStrategically();
-        } else {
-            throw new Error(`
-                {this.solver} is not a valid option. Choose between 'A*', 'IDA*', and 'strategic'.`)
+        await this.heuristic.initialize();
+
+        switch (this.solver) {
+            case 'A*':
+                return this.solveAStar(maxIterations);
+            case 'IDA*':
+                return this.solveIDAStar(maxIterations);
+            case 'strategic':
+                return this.solveStrategically();
+            default:
+                throw new Error(`
+                    {this.solver} is not a valid option. \
+                    Choose between 'A*', 'IDA*', and 'strategic'.`)
+                break;
+
         }
-        
     }
 
     solveAStar(maxIterations) {
@@ -578,7 +745,7 @@ class Puzzle {
             }
         
         );
-        let grid = new Grid(this.numRows, this.numCols, this.tiles, this.emptyPos, this.heuristic, 0);
+        let grid = new Grid(this.numRows, this.numCols, this.tiles, this.emptyPos, this.heuristic);
         q.add(grid);
 
         let curr;
@@ -611,10 +778,7 @@ class Puzzle {
                     // add to queue and replace best score if score better than previous best
                     // NOTE: not using <, as previous best could be undefined
                     // executes if best either undefined or >= current score
-                    // NOTE: obviates need for visited set, as only adds node when
-                    // better than best found so far vs. adding when better than best possible
-                    // (by the time best possible is found, several nodes could be discarded
-                    // by being worse than previous discovered not-yet-popped nodes)
+                    // Can be used for inconsistent heuristics (like PDB with compressed empty position)
                     if (!(score >= best.get(key))) {
                         best.set(key, score);
                         q.add(newGrid);
@@ -627,10 +791,14 @@ class Puzzle {
         return null;
     }
 
-    // TODO: make use of maxIterations or some other limiting function to stop freezing browser
-    // maxDepth probably better limiting factor though
+    // TODO: make use of maxNodesExpanded to limit runtime
+    // TODO: consider converting to non-recursive function (probably better performance and memory usage while sacrificing code clarity)
+
+    // TODO: consider using array (npm denque) or linked-list backed stack to improve performance
+    // (profile performance, as linked-list loses locality of reference, and array-based stack will be very similar to native array
+    // except probably less optimized (with only possible advantage being not shrinking array when popping))
     solveIDAStar(maxIterations) {
-        let grid = new Grid(this.numRows, this.numCols, this.tiles, this.emptyPos, this.heuristic, 0);
+        let grid = new Grid(this.numRows, this.numCols, this.tiles, this.emptyPos, this.heuristic);
 
         // upper bound of total distance for when to stop exploring nodes in given iteration of dfs
         let bound = grid.heuristicValue;
@@ -1390,8 +1558,8 @@ class StrategicGrid extends BaseGrid{
 // Grid optimized for A* and IDA*
 class Grid {
 
-    constructor(numRows, numCols, tiles, emptyPos, heuristic, traveledDist, heuristicValue = null, 
-        lastMove = null, lastGrid = null, validMoves = null) {
+    constructor(numRows, numCols, tiles, emptyPos, heuristic, traveledDist = 0,
+        heuristicValue = null, lastMove = null, lastGrid = null, validMoves = null) {
         this.numRows = numRows;
         this.numCols = numCols;
         this.tiles = tiles;
@@ -1565,10 +1733,13 @@ class Grid {
      * @returns {boolean} whether puzzle is solved
      */
     isSolved() {
-        if (this.heuristic.isSolved(this.heuristicValue)) return true;
-
-        // accounts for if can't determine if puzzle solved using heuristic value
-        return this.tiles.every((goalInd, ind) => goalInd === ind);
+        let solved = this.heuristic.isSolved(this.heuristicValue);
+        if (solved === undefined) {
+            // accounts for if can't determine if puzzle solved using heuristic value
+            return this.tiles.every((goalInd, ind) => goalInd === ind);
+        } else {
+            return solved;
+        }
     }
 }
 

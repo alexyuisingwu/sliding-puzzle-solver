@@ -4,7 +4,6 @@
   "description": "",
   "main": "dist/script.js",
   "dependencies": {
-    "avl": "^1.4.4",
     "cropperjs": "^1.4.2",
     "fastpriorityqueue": "^0.6.1",
     "ndarray": "^1.0.18",
