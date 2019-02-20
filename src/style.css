@@ -102,9 +102,7 @@ h1 {
 	fill:none;
 	stroke-width: 1;
 	vector-effect: non-scaling-stroke;
-	/* keeps tile outlines visible against any background*/
-	mix-blend-mode: difference;
-	stroke:white;
+	stroke: #646464;
 }
 
 .tile-container {

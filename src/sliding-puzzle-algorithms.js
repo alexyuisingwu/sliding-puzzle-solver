@@ -6,7 +6,7 @@
 // "Criticizing Solutions to Relaxed Models Yields Powerful Admissible Heuristics"
 // by Othar Hansson and Andrew Mayer
 
-// TODO: remove A* solving option to allow IDA* solving to be cleaner (applyMove() and reversing move, can rely on knowing states traveled and reversed in straight line)
+// TODO: consider implementing in web assembly for better speed
 
 // TODO: consider using closure compiler for smaller bundles and faster runtime
 
@@ -55,10 +55,10 @@ const REVERSE_MOVE_MAP = {
 // grid not part of constructor as single heuristic passed between all grids in a given Puzzle
 class ManhattanHeuristic {
 
-    constructor(numRows, numCols) {
-        this.numRows = numRows;
-        this.numCols = numCols;
-        this.numTiles = numRows * numCols;
+    constructor(grid) {
+        this.numRows = grid.numRows;
+        this.numCols = grid.numCols;
+        this.numTiles = grid.numRows * grid.numCols;
 
         // TODO: consider changing moves to constants or enums
         this.moveNumberMap = {
@@ -158,6 +158,9 @@ class ManhattanHeuristic {
         return this.getUpdateDelta(newGrid, startInd, endInd, move) + newGrid.heuristicValue;
     }
 
+    // only here for compatability reasons (useful in PDB)
+    reverseUpdate(){}
+
     // returns change in heuristic distance from move
     // newGrid = Grid after move (distinct object), with all properties updated besides heuristicValue
     // startInd = ind moved tile started in
@@ -193,8 +196,8 @@ class ManhattanHeuristic {
 // NOTE: methods not static to support using cached MD data specific to puzzle
 class LinearConflictHeuristic extends ManhattanHeuristic{
 
-    constructor(numRows, numCols) {
-        super(numRows, numCols);
+    constructor(grid) {
+        super(grid);
     }
 
     // returns whether precomputation could be completed
@@ -516,22 +519,28 @@ class LinearConflictHeuristic extends ManhattanHeuristic{
 
 class PatternDatabaseHeuristic {
 
-    constructor(numRows, numCols, emptyPos) {
-        this.numRows = numRows;
-        this.numCols = numCols;
-        this.numTiles = numRows * numCols;
-        this.emptyPos = emptyPos;
+    constructor(grid) {
+        this.numRows = grid.numRows;
+        this.numCols = grid.numCols;
+        this.numTiles = grid.numRows * grid.numCols;
+        // tracks empty goal position
+        this.emptyPos = grid.tiles[grid.emptyPos];
 
         this.partitions = [];
         this.dbs = [];
+
+        // maps goal indices to tile indices
+        this.goalMap = new Uint8Array(this.numTiles);
+
+        grid.tiles.forEach((goalInd, ind) => {
+            this.goalMap[goalInd] = ind;
+        });
     }
 
     async initialize() {
         return this._loadDatabase(this.emptyPos);
     }
 
-    // TODO: make sure to wait until _loadDatabase complete
-    // before allowing solve
     async _loadDatabase(emptyPos) {
         // NOTE: can't return outer fetch
         let loadPromise;
@@ -560,10 +569,7 @@ class PatternDatabaseHeuristic {
             // NOTE: not using await to let each fetch request execute asynchronously
             promises.push(fetch(directory + '/' + fileName)
                 .then(response => {
-                    // TODO: confirm that partitions and dbs
-                    // sent in correct order
-                    // (since using async promises)
-                    console.log(response);
+                    // console.log(response);
                     if (response.ok) {
                         return response.arrayBuffer();
                     } else {
@@ -572,76 +578,48 @@ class PatternDatabaseHeuristic {
                 }).then(buffer => {
                     // NOTE: partitions added here instead of at start to ensure async addition of dbs line up
                     this.partitions.push(partition);
+
                     this.dbs.push(ndarray(
                         new Uint8Array(buffer), 
                         new Uint8Array(partition.length).fill(this.numTiles)));
                 }));
         }
 
-        console.log(json);
-        console.log(promises);
-
         await Promise.all(promises);
 
     }
 
-    // TODO: see why solution lengths too long
-    // (calculate probably returning wrong value)
-    // PROGRESS: some partition combos add up to >80
-    // (either problem with interpretation here or problem
-    // with calculation in Java)
-
-    // ex:
-    // [0, 8, 10, 4, 3, 15, 14, 11, 7, 6, 5, 1, 2, 9, 12, 13]
-    // heuristicValue = 89
-    // indices = [14, 15, 6] part = [12, 13, 14], h = 16
-    // inds = [11, 12, 3, 10, 1, 13] parts = [1, 2, 4, 5, 8, 9] => 38
-    // inds = [4, 9, 8, 2, 7, 5] parts = [3, 6, 7, 10, 11, 15] => 35
+    // TODO: only calculate affected partition for performance
+    // TODO: calculate partition map once and keep updating for performance
     calculate(grid) {
 
         let heuristicValue = 0;
 
-        let goalMap = new Uint8Array(this.numRows * this.numCols);
-
-        grid.tiles.forEach((goalInd, ind) => {
-            goalMap[goalInd] = ind;
-        });
-
         this.partitions.forEach((partition, ind) => {
-
-            // for each goal index, find current position of goal in grid.tiles
-            let indices = partition.map(goalInd => goalMap[goalInd]);
-
-            // TODO: fold into 1 statement after testing
-            let temp = this.dbs[ind].get(...indices);
-
-            heuristicValue += temp;
+            let indices = partition.map(goalInd => this.goalMap[goalInd]);
+            heuristicValue += this.dbs[ind].get(...indices);
         });
 
-        // TODO: delete after testing
-        if (heuristicValue > 80) {
-            console.log(this.dbs);
-            console.log(this.partitions);
-            console.log(grid.tiles);
-
-            // this.partitions.forEach((partition, ind) => {
-
-            //     // for each goal index, find current position of goal in grid.tiles
-            //     let indices = partition.map(goalInd => goalMap[goalInd]);
-
-            //     // TODO: fold into 1 statement after testing
-            //     let temp = this.dbs[ind].get(...indices);
-
-            //     heuristicValue += temp;
-            // });
-
-            throw new Error('4x4 grid cannot be >80 moves away from goal');
-        }
         return heuristicValue;
     }
 
-    update(newGrid) {
+    update(newGrid, startInd, endInd, move) {
+        this.goalMap[newGrid.tiles[endInd]] = endInd;
+        this.goalMap[newGrid.tiles[startInd]] = startInd;
+
         return this.calculate(newGrid);
+    }
+
+    // reverses changes in this.goalMap
+    // newGrid = grid before reversing move
+    // 2nd param = moveRecord
+    reverseUpdate(newGrid, {emptyPos: oldEmptyPos}) {
+        let goalInd = newGrid.tiles[oldEmptyPos];
+        let emptyGoalInd = newGrid.tiles[newGrid.emptyPos];
+
+        // swap moved tile with empty tile
+        this.goalMap[goalInd] = newGrid.emptyPos;
+        this.goalMap[emptyGoalInd] = oldEmptyPos;
     }
 
     isSolved(heuristicValue) {
@@ -664,10 +642,10 @@ class Puzzle {
      * @param heuristic heuristic used to determine how far grid is from goal state.
      * Default heuristic is Linear Conflict, possible values are 'MD' and 'LC'
      * corresponding with manhattan distance and linear conflict respectively
-     * @param solver solving algorithm to use ('IDA*' or 'A*')
+     * @param solver solving algorithm to use ('IDA*' or 'strategic')
      */
     constructor(numRows, numCols, tiles, emptyPos, 
-        {heuristic = 'LC', solver = numRows * numCols > 9 ? 'IDA*' : 'A*'} = {}) {
+        {heuristic, solver = 'IDA*'} = {}) {
 
         this.numRows = numRows;
         this.numCols = numCols;
@@ -687,108 +665,38 @@ class Puzzle {
                 heuristicClass = PatternDatabaseHeuristic;
                 break;
             default:
-                heuristicClass = LinearConflictHeuristic;
+                if (numRows === 4 && numCols === 4) {
+                    heuristicClass = PatternDatabaseHeuristic;
+                } else {
+                    heuristicClass = LinearConflictHeuristic;
+                }
         }
 
-        this.heuristic = new heuristicClass(numRows, numCols, emptyPos);
+        this.heuristic = new heuristicClass(this);
 
         this.solver = solver;
     }
-
-    // TODO: consider changing maxIterations to maxNodesExpanded for clarity
 
     // returns
     // - solution as array of moves within (l/r/u/d)
     // - -1 if solution took too long to find
     // - null if solution could not be found
-    // NOTE: maxIterations ignored for 'strategic' option
-    async solve(maxIterations = 100000) {
+    // NOTE: maxNodesExpanded ignored for 'strategic' option
+    async solve(maxNodesExpanded = 1000000000) {
 
         await this.heuristic.initialize();
 
         switch (this.solver) {
-            case 'A*':
-                return this.solveAStar(maxIterations);
             case 'IDA*':
-                return this.solveIDAStar(maxIterations);
+                return this.solveIDAStar(maxNodesExpanded);
             case 'strategic':
                 return this.solveStrategically();
             default:
                 throw new Error(`
                     {this.solver} is not a valid option. \
-                    Choose between 'A*', 'IDA*', and 'strategic'.`)
+                    Choose between 'IDA*', and 'strategic'.`)
                 break;
-
         }
-    }
-
-    solveAStar(maxIterations) {
-        // TODO: consider using bucket queue instead of priority queue
-        // e.g. array where key = total distance, value = node with that distance
-        // also consider nested bucket queue to allow ordering by traveledDist to tie-break
-        let q = new FastPriorityQueue(
-        
-            // NOTE: comparator puts grid1 first if return "true" (grid1 less than grid2)
-            (grid1, grid2) => {
-                let total1 = grid1.heuristicValue + grid1.traveledDist,
-                    total2 = grid2.heuristicValue + grid2.traveledDist;
-
-                // favor grids with more traveled distance
-                // explanation: since admissisible heuristics
-                // underestimate or match actual distance to goal,
-                // actual distance of grid with more traveled distance is likely to be <=
-                // actual distance of grid with less traveled distance
-                // when total distance is equal
-                return total1 === total2 ? 
-                    grid1.traveledDist > grid2.traveledDist : 
-                    total1 < total2;
-            }
-        
-        );
-        let grid = new Grid(this.numRows, this.numCols, this.tiles, this.emptyPos, this.heuristic);
-        q.add(grid);
-
-        let curr;
-        
-        // maps Grid state to best/shortest (heuristic + distance traveled) found so far
-        let best = new Map();
-        let iterations = 0;
-
-        while (q.size > 0) {
-            if (iterations > maxIterations) {
-                return -1;
-            }
-
-            curr = q.poll();
-
-            if (curr.isSolved()) {
-                console.log(`Solved in ${iterations} iterations`);
-                return curr.reconstructPath();
-            }
-
-            for (let move of curr.getValidMoves()) {
-                // reversing a move will never lead to an optimal path
-                if (move !== Grid.getReversedMove(curr.lastMove)) {
-                    let newGrid = curr.cloneAndApplyMove(move);
-
-                    let score = newGrid.traveledDist + newGrid.heuristicValue;
-
-                    let key = newGrid.tiles.toString();
-
-                    // add to queue and replace best score if score better than previous best
-                    // NOTE: not using <, as previous best could be undefined
-                    // executes if best either undefined or >= current score
-                    // Can be used for inconsistent heuristics (like PDB with compressed empty position)
-                    if (!(score >= best.get(key))) {
-                        best.set(key, score);
-                        q.add(newGrid);
-                    }
-                }
-            }
-            iterations++;
-        }
-        // no solution found
-        return null;
     }
 
     // TODO: make use of maxNodesExpanded to limit runtime
@@ -797,7 +705,7 @@ class Puzzle {
     // TODO: consider using array (npm denque) or linked-list backed stack to improve performance
     // (profile performance, as linked-list loses locality of reference, and array-based stack will be very similar to native array
     // except probably less optimized (with only possible advantage being not shrinking array when popping))
-    solveIDAStar(maxIterations) {
+    solveIDAStar(maxNodesExpanded) {
         let grid = new Grid(this.numRows, this.numCols, this.tiles, this.emptyPos, this.heuristic);
 
         // upper bound of total distance for when to stop exploring nodes in given iteration of dfs
@@ -1559,7 +1467,7 @@ class StrategicGrid extends BaseGrid{
 class Grid {
 
     constructor(numRows, numCols, tiles, emptyPos, heuristic, traveledDist = 0,
-        heuristicValue = null, lastMove = null, lastGrid = null, validMoves = null) {
+        heuristicValue = null, validMoves = null) {
         this.numRows = numRows;
         this.numCols = numCols;
         this.tiles = tiles;
@@ -1568,9 +1476,6 @@ class Grid {
         this.heuristic = heuristic;
         this.traveledDist = traveledDist;
         this.heuristicValue = heuristicValue === null ? heuristic.calculate(this) : heuristicValue;
-
-        this.lastMove = lastMove;
-        this.lastGrid = lastGrid;
 
         // TODO: attach to external obj or pass between grids to avoid recomputing every new grid
         // precomputing values for better performance
@@ -1617,67 +1522,15 @@ class Grid {
             Math.abs(this.getTileCol(tile1) - this.getTileCol(tile2));
     }
 
-    reconstructPath() {
-        let path = [];
-        let curr = this;
-        while (curr.lastMove !== null) {
-            path.unshift(curr.lastMove);
-            curr = curr.lastGrid;
-        }
-        return path;
-    }
-
-    /**
-     * returns deep copy of grid ignoring lastGrid (null)
-     */
-    clone() {
-        return new Grid(this.numRows, this.numCols, this.tiles.slice(), this.emptyPos, this.heuristic,
-            this.traveledDist, this.heuristicValue, this.lastMove, null, this.validMoves);
-    }
-
-    /**
-     * returns copy of current grid with specified directional move applied to tile moving into empty position
-     * also updates all affected Grid fields in new Grid (emptyPos, heuristic/travel distance, etc.)
-     * @param move direction to move tile into empty space
-     * @return returns copy of current grid with specified move applied to tile into empty position
-     */
-    cloneAndApplyMove(move) {
-        let newGrid = this.clone();
-
-        newGrid.lastGrid = this;
-        newGrid.lastMove = move;
-
-        newGrid._applyMoveHelper(move);
-
-        return newGrid;
-    }
-
-    // Applies move to grid NOT clone on grid
+    // Applies move to grid
     // Returns moveRecord object storing old heuristicValue and emptyPos (for use in reverseMove())
     // (useful for IDA* as memory allocation can be avoided)
-    // NOTE: separate function instead of consolidation with "clone" param for slightly better performance
-    // NOTE: does NOT update lastMove or lastGrid
+    // NOTE: moveRecord used instead of storing info directly on grid
+    // to allow for use of single grid instance in IDA*
     applyMove(move) {
         let oldHeuristicValue = this.heuristicValue;
         let oldEmptyPos = this.emptyPos;
 
-        this._applyMoveHelper(move);
-
-        // TODO; consider changing to typedArray for slightly better performance
-        return {heuristicValue: oldHeuristicValue, emptyPos: oldEmptyPos};
-    }
-
-    reverseMove(moveRecord) {
-        this.traveledDist--;
-
-        this.heuristicValue = moveRecord.heuristicValue;
-
-        this.swap(this.emptyPos, moveRecord.emptyPos);
-        this.emptyPos = moveRecord.emptyPos;
-    }
-
-    // applies move to specified grid WITHOUT updating lastMove or lastGrid
-    _applyMoveHelper(move) {
         let movedInd = this.getMovedInd(move);
         let endInd = this.emptyPos;
 
@@ -1687,6 +1540,19 @@ class Grid {
         this.traveledDist++;
 
         this.heuristicValue = this.heuristic.update(this, movedInd, endInd, move);
+
+        // TODO; consider changing to typedArray for possibly slightly better performance
+        return {heuristicValue: oldHeuristicValue, emptyPos: oldEmptyPos};
+    }
+
+    reverseMove(moveRecord) {
+        this.heuristic.reverseUpdate(this, moveRecord);
+        this.traveledDist--;
+
+        this.heuristicValue = moveRecord.heuristicValue;
+
+        this.swap(this.emptyPos, moveRecord.emptyPos);
+        this.emptyPos = moveRecord.emptyPos;
     }
 
     /**

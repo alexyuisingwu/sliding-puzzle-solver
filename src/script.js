@@ -1,3 +1,5 @@
+// TODO: consider changing so tiles start out in goal puzzle, with arrow to copy configuration to start puzzle
+
 // TODO: consider adding togglable "track move" feature
 
 // TODO: consider changing to vertical orientation if screen too narrow or input images are landscape orientation

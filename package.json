@@ -4,21 +4,21 @@
   "description": "",
   "main": "dist/script.js",
   "dependencies": {
-    "cropperjs": "^1.4.2",
+    "cropperjs": "^1.4.3",
     "fastpriorityqueue": "^0.6.1",
     "ndarray": "^1.0.18",
-    "validator": "^10.8.0",
+    "validator": "^10.11.0",
     "worker-loader": "^2.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.1.2",
-    "@babel/preset-env": "^7.1.0",
-    "babel-loader": "^8.0.4",
-    "css-loader": "^1.0.0",
+    "@babel/core": "^7.3.3",
+    "@babel/preset-env": "^7.3.1",
+    "babel-loader": "^8.0.5",
+    "css-loader": "^1.0.1",
     "regenerator-runtime": "^0.12.1",
     "style-loader": "^0.23.1",
-    "webpack": "^4.26.1",
-    "webpack-cli": "^3.1.2"
+    "webpack": "^4.29.5",
+    "webpack-cli": "^3.2.3"
   },
   "author": "Alex Wu",
   "license": "ISC"

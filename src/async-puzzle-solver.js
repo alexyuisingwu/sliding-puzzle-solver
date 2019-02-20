@@ -20,7 +20,7 @@ class Puzzle {
      * @param emptyPos position of empty tile in grid
      * @param heuristic heuristic used to determine how far grid is from goal state.
      * Default heuristic is Linear Conflict, possible values are 'MD' and 'LC'
-     * @param solver solving algorithm to use ('IDA*' or 'A*')
+     * @param solver solving algorithm to use ('IDA*' or 'strategic')
      * corresponding with manhattan distance and linear conflict respectively
      * @param timeout milliseconds to wait before stopping solve attempt (default 120000)
      * timeout of "null" allows function to run without a time limit

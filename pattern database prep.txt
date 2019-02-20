@@ -1,0 +1,72 @@
+Folder layout:
+	- # rows
+		- # cols
+			- empty position of goal configuration (flattened index)
+				- info.json
+					{
+
+						partitions: [
+							{
+								tiles: [1, 3, 5, 9, ...],
+								dbFile: "partition1.db"
+							},
+							...
+						]
+					}
+					- NOTE: partitions should not include emptyTile (specified by parent folder)
+				- 1 file for each partition
+					- file name matching dbFile in info.json
+
+DB Layout:
+	- TODO: consider collapsing by emptyPosition (take min heuristic for config across all emptyPos possibilities)
+		- no longer consistent, but still admissible
+		- much less space taken up
+		- probably still fast enough using IDA* (less influenced by inconsitency then A*)
+	- C-array (TypedArray) row-major storage
+	- each dimension tracks current position (flattened index) of tiles in order provided in info.json
+		- e.g. [1, 3, 5] => positions of tiles in current configuration that have goal positions of [1, 3, 5]
+	- last dimension tracks position (flattened index) of emptyPos
+	- value of array at position = heuristic value of associated configuration
+	- Size:
+		- sum of n ^ (x + 1) entries for all x across partitions
+			- x = # tiles in a partition
+			- n ^ (x + 1) bytes given <256 tiles (2^8 = 256)
+	- PROBLEM:
+		- accounting for emptyPos drastically increases RAM used
+			- ~537 MB vs ~34 MB for 6-6-3 partitioning
+		- solution: just collapse by emptyPositions
+	- PROBLEM:
+		- indexing by empty position of goal configuration means that even only accounting for 4x4 puzzle, you'd need ~0.536 GB
+		- Github has respository size limit of 1 GB
+		- Heroku slug size limit is 500 MB
+		- AWS 5 GB free
+		- solution: collapse by empty position of goal configuration as well
+			- heuristic will be less useful (less informative/lower value)
+			- ACTUALLY: can't collapse by empty position of goal configuration, as that affects how tiles can move (tiles can only move into empty position)
+	- POSSIBLE SOLUTIONS TO ALL STORAGE PROBLEMS:
+		- use external database (SQL? NoSQL?)
+		- 617,555 nodes explored on average ith 6-6-3 partitioning on 4x4 puzzle
+		- networking probably expensive
+		- website would also now be dependent on external server, which I don't want
+		- Dynamic pattern databases
+			- according to Additive Pattern Databases (Korf...), not much faster and sometimes slower than linear conflict, even when linear conflict is not cached
+		- Use hashmap
+			- PROBLEM: storing objects to file in Javascript that aren't TypedArrays involves String conversion (slow and takes up much more space)
+				- while possible to create own Hashmap using TypedArray to back, probably not worth it
+					- previous testing showed existing Hashmap libraries that didn't use Javascript's Object or Map were slower
+					- previous testing (if indicates correctly after reviewing) shows that hashing is substantially slower than array access
+
+
+TODO:
+	- instead of implementing pdbs, use above considerations in presentation and just implement timing/performance testing functions to demonstrate how each change improved runtime/memory usage
+	- if data supports, use data of change in performance from base linear conflict to improved linear conflict and compare to change in base linear conflict to pdb in 2004 paper
+	- UPDATE
+		- do pdb
+		- explain how pdb assumes empty tile at constant position (top left in example)
+		- dynamically generate variants of partitions that dynamically fit together to save space
+
+Alternatively, if doing pdb:
+	- for each partition
+		- for each empty pos:
+			- do bfs for partition
+				- store heuristic value for state if lower than current min
