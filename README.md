@@ -114,7 +114,9 @@ The [Pattern Database](https://www.sciencedirect.com/science/article/pii/S000437
 
 Essentially, the pattern database heuristic divides the problem into smaller disjoint subproblems. For each subproblem (set of non-overlapping tiles), the minimum distance required to reach any tile configuration from the goal state is recorded as a heuristic value. The heuristic values for each subproblem are then summed to generate a heuristic value for the entire puzzle.
 
-A 6-6-3 static partitioning is used here, as it strikes a good balance between database size (and thus download size) and solve-time.
+A 6-6-3 static partitioning is used here, as it strikes a good balance between database size (and thus download size and RAM usage) and solve-time.
+
+Pattern databases are currently only used for 4x4 puzzles as smaller puzzles do not require them, while larger puzzles require higher RAM usage (as databases used become larger). Hosting larger databases would also require storing databases on an external server (as github has a 1 GB on project size and a 100 MB limit on file size).
 
 See [this github project](https://github.com/alexyuisingwu/sliding-puzzle-database-generator) for the code that generated the pattern database partitions.
 
