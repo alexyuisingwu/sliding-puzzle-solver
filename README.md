@@ -51,7 +51,7 @@ npm install
 
 ### Solvability
 Currently, this app can optimally solve puzzles whose dimensions add up to 7 or less (4x3, 5x2, etc.) within a second.
-4x4 puzzles can be solved within 2 minutes, 1 minute on average.
+4x4 puzzles can also be solved within a few seconds, though initial download of database files may slow things down (assuming they are not cached).
 
 The strategic solver can solve puzzles in linear time (usually within a few seconds for puzzles with triple digit tile counts). However, it is non-optimal and thus may produce solutions several times as long as the optimal solver. It's most useful as a visualization of a valid strategy for humans to solve sliding puzzles.
 
@@ -78,15 +78,20 @@ Tile "a" is first placed in its correct position (the top of the column). Then, 
 When only a 2x2 unsolved square remains, the solver first solves the top left or bottom left tiles (depending on whether one tile is supposed to be empty in the goal state), and then solves the empty tile (placing it in its goal position). A human solver could simply solve any 2 tiles in the 2x2 puzzle (the above order is only due to implementation details).
 
 ### Search Algorithm
-This app uses 2 different search algorithms to optimally solve puzzles: [A*](https://en.wikipedia.org/wiki/A*_search_algorithm) and 
-[IDA*](https://en.wikipedia.org/wiki/Iterative_deepening_A*). While A* generally expands less nodes than IDA*, its memory
-costs balloon as puzzles sizes increase, and costly maintenance of large queues of unexpanded nodes quickly reduces
-its performance benefits. Therefore, it is only feasible to use A* for puzzles of size 3x3 or less. IDA*
-is used for all puzzles with more than 9 tiles.
+This app uses [IDA*](https://en.wikipedia.org/wiki/Iterative_deepening_A*) to find optimal solutions.
+
+Previous versions also used A* for 3x3 and smaller puzzles. However, this feature was removed to clean up the code, as there was not much benefit to using it vs. IDA*.
+
+While A* generally expands less nodes than IDA*, its memory costs balloon as puzzles sizes increase, and costly maintenance of large queues of unexpanded nodes quickly reduces its performance benefits. As IDA* has roughly the same performance on puzzles with smaller dimensions and vastly better performance for larger puzzles, IDA* is now used for all puzzles.
 
 ### Heuristics
-Both search algorithms use the same heuristic: [Linear Conflict](https://www.sciencedirect.com/science/article/pii/002002559290070O).
-Essentially, this heuristic finds the tiles in each row and column that are in their goal row/column.
+
+#### Linear Conflict
+The [Linear Conflict](https://www.sciencedirect.com/science/article/pii/002002559290070O) heuristic is used by default for all non-4x4 puzzles.
+
+Essentially, this heuristic is an extension of the manhattan distance heuristic, accounting for interactions between tiles.
+
+In more detail, this heuristic finds the tiles in each row and column that are in their goal row/column.
 Then, the number of conflicts between tiles that meet this criteria are counted within each row/column.
 
 A conflict occurs when 2 tiles must move past one another to reach their goal positions.
@@ -102,6 +107,16 @@ must move out of the way for the other tile to move past, and then move back int
 This heuristic is combined additively with the Manhattan Distance heuristic (MD) to create a more informed heuristic, 
 as the 2 heuristics do not overlap. MD simply sums the horizontal and vertical distance between every non-empty tile's
 current and goal positions, as each tile must at least travel that distance to reach its goal.
+
+#### Pattern Databases
+
+The [Pattern Database](https://www.sciencedirect.com/science/article/pii/S0004370201000923) heuristic is used for 4x4 puzzles. While the linear conflict heuristic can solve most 4x4 puzzles, solve-time can extend up to 2 minutes for some puzzles. The pattern database heuristic lowers average solve-time to only a few seconds (though initial download of database files slows down solve-time before they are cached).
+
+Essentially, the pattern database heuristic divides the problem into smaller disjoint subproblems. For each subproblem (set of non-overlapping tiles), the minimum distance required to reach any tile configuration from the goal state is recorded as a heuristic value. The heuristic values for each subproblem are then summed to generate a heuristic value for the entire puzzle.
+
+A 6-6-3 static partitioning is used here, as it strikes a good balance between database size (and thus download size) and solve-time.
+
+See [this github project](https://github.com/alexyuisingwu/sliding-puzzle-database-generator) for the code that generated the pattern database partitions.
 
 ### Optimizations
 
