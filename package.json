@@ -7,7 +7,7 @@
     "cropperjs": "^1.4.3",
     "fastpriorityqueue": "^0.6.1",
     "ndarray": "^1.0.18",
-    "validator": "^10.11.0",
+    "validator": "^13.7.0",
     "worker-loader": "^2.0.0"
   },
   "devDependencies": {
